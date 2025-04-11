@@ -1,9 +1,10 @@
-import { useState } from "react";
 import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
-} from "react-router-dom";
+  ClerkProvider,
+  SignedIn,
+  SignedOut,
+  RedirectToSignIn,
+} from "@clerk/clerk-react";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 // Layouts
 import Layout from "./components/layout/Layout";
@@ -19,14 +20,18 @@ import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 
 function App() {
-  const [user, setUser] = useState(null);
+  const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-  // Simple auth check for protected routes
+  // Protected route component using Clerk
   const ProtectedRoute = ({ children }) => {
-    if (!user) {
-      return <Navigate to="/login" replace />;
-    }
-    return children;
+    return (
+      <>
+        <SignedIn>{children}</SignedIn>
+        <SignedOut>
+          <RedirectToSignIn />
+        </SignedOut>
+      </>
+    );
   };
 
   const router = createBrowserRouter([
@@ -78,11 +83,11 @@ function App() {
     },
     {
       path: "/login",
-      element: <Login setUser={setUser} />,
+      element: <Login />,
     },
     {
       path: "/register",
-      element: <Register setUser={setUser} />,
+      element: <Register />,
     },
     {
       path: "/forgot-password",
@@ -90,7 +95,20 @@ function App() {
     },
   ]);
 
-  return <RouterProvider router={router} />;
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      appearance={{
+        elements: {
+          rootBox: "mx-auto",
+          card: "shadow-md rounded-md border border-gray-200",
+          formButtonPrimary: "bg-primary hover:bg-primary-dark",
+        },
+      }}
+    >
+      <RouterProvider router={router} />
+    </ClerkProvider>
+  );
 }
 
 export default App;
