@@ -7,7 +7,7 @@ import {
   initiateCalendarAuth,
   handleCalendarCallback,
   saveSelectedCalendars,
-} from "../../lib/calendarService";
+} from "../calendarService";
 
 // This component handles the integration with external calendar services
 const CalendarIntegration = ({ onClose, onSuccess }) => {

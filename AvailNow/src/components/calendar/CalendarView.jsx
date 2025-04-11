@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Loader,
+  AlertTriangle,
+} from "lucide-react";
 import AvailabilitySlot from "./AvailabilitySlot";
+import { useClerkUser } from "../../hooks/useClerkUser";
+import {
+  getConnectedCalendars,
+  fetchEventsFromMultipleCalendars,
+  getSelectedCalendars,
+} from "../../lib/calendarService";
+import { mergeAvailabilityWithEvents } from "../../lib/calendarUtils";
 
 const DAYS = [
   "Sunday",
@@ -26,18 +39,124 @@ const MONTHS = [
   "December",
 ];
 
-const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
+const CalendarView = ({ onAddCalendar }) => {
+  const { supabaseUser } = useClerkUser();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("week"); // 'day', 'week', 'month'
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
+  const [connectedCalendars, setConnectedCalendars] = useState([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState([]);
+  const [calendarEvents, setCalendarEvents] = useState([]);
   const [businessHours, setBusinessHours] = useState({
     startTime: "09:00",
     endTime: "17:00",
     workingDays: [1, 2, 3, 4, 5], // Monday to Friday
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Hours to display in the calendar
   const displayHours = Array.from({ length: 12 }, (_, i) => i + 8); // 8am to 7pm
+
+  // Load connected calendars and selected calendars
+  useEffect(() => {
+    if (supabaseUser) {
+      loadCalendarData();
+    }
+  }, [supabaseUser]);
+
+  // Load calendar events when date, view, or selected calendars change
+  useEffect(() => {
+    if (supabaseUser && selectedCalendarIds.length > 0) {
+      loadCalendarEvents();
+    }
+  }, [supabaseUser, currentDate, view, selectedCalendarIds]);
+
+  // Load calendar data (connected calendars and selected calendars)
+  const loadCalendarData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Get connected calendars
+      const calendars = await getConnectedCalendars(supabaseUser.id);
+      setConnectedCalendars(calendars);
+
+      // Get selected calendar IDs
+      const selectedCalendars = await getSelectedCalendars(supabaseUser.id);
+      setSelectedCalendarIds(selectedCalendars);
+    } catch (err) {
+      console.error("Error loading calendar data:", err);
+      setError("Failed to load calendar data. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load calendar events for the current date range
+  const loadCalendarEvents = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Calculate date range based on current view
+      const { startDate, endDate } = getDateRange();
+
+      // Fetch events for selected calendars
+      const events = await fetchEventsFromMultipleCalendars(
+        supabaseUser.id,
+        selectedCalendarIds,
+        startDate,
+        endDate
+      );
+
+      setCalendarEvents(events);
+
+      // Merge events with availability slots
+      updateAvailabilityWithEvents(events);
+    } catch (err) {
+      console.error("Error loading calendar events:", err);
+      setError("Failed to load calendar events. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Get date range for current view
+  const getDateRange = () => {
+    const startDate = new Date(currentDate);
+    const endDate = new Date(currentDate);
+
+    if (view === "day") {
+      // Just the current day
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (view === "week") {
+      // Current week (Sunday to Saturday)
+      const day = startDate.getDay(); // 0 = Sunday, 6 = Saturday
+      startDate.setDate(startDate.getDate() - day); // Go to start of week (Sunday)
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate.setDate(startDate.getDate() + 6); // Go to end of week (Saturday)
+      endDate.setHours(23, 59, 59, 999);
+    } else if (view === "month") {
+      // Current month
+      startDate.setDate(1); // First of the month
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate.setMonth(endDate.getMonth() + 1, 0); // Last of the month
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    return { startDate, endDate };
+  };
+
+  // Update availability slots with calendar events
+  const updateAvailabilityWithEvents = (events) => {
+    // Merge existing availability slots with calendar events
+    const updatedSlots = mergeAvailabilityWithEvents(availabilitySlots, events);
+    setAvailabilitySlots(updatedSlots);
+  };
 
   // Generate dates for the current view
   const getDatesForView = () => {
@@ -127,7 +246,7 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
     return businessHours.workingDays.includes(date.getDay());
   };
 
-  // Mock function to create a new availability slot
+  // Create a new availability slot
   const createAvailabilitySlot = (date, hour) => {
     const startTime = new Date(date);
     startTime.setHours(hour, 0, 0, 0);
@@ -158,6 +277,18 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
     });
   };
 
+  // Check if there's an event at the specified date and hour
+  const getEventAtTime = (date, hour) => {
+    return calendarEvents.find((event) => {
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const timeToCheck = new Date(date);
+      timeToCheck.setHours(hour, 0, 0, 0);
+
+      return timeToCheck >= eventStart && timeToCheck < eventEnd;
+    });
+  };
+
   // Toggle a slot's availability
   const toggleSlotAvailability = (slotId) => {
     setAvailabilitySlots(
@@ -169,27 +300,6 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
       })
     );
   };
-
-  // Mock data for demonstration - replace with actual API calls
-  useEffect(() => {
-    // Simulate fetching availability slots from an API
-    const mockSlots = [
-      {
-        id: "1",
-        startTime: new Date(new Date().setHours(10, 0, 0, 0)),
-        endTime: new Date(new Date().setHours(11, 0, 0, 0)),
-        available: true,
-      },
-      {
-        id: "2",
-        startTime: new Date(new Date().setHours(14, 0, 0, 0)),
-        endTime: new Date(new Date().setHours(15, 0, 0, 0)),
-        available: false,
-      },
-    ];
-
-    setAvailabilitySlots(mockSlots);
-  }, []);
 
   // Render the calendar based on the current view
   const renderCalendar = () => {
@@ -292,6 +402,21 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
 
                 {dates.map((date, index) => {
                   const slot = getSlotAtTime(date, hour);
+                  const event = getEventAtTime(date, hour);
+
+                  // If there's an event but no slot, create a virtual unavailable slot
+                  const displaySlot =
+                    slot ||
+                    (event
+                      ? {
+                          id: `event-${event.id}`,
+                          startTime: event.start,
+                          endTime: event.end,
+                          available: false,
+                          title: event.title,
+                          isEvent: true,
+                        }
+                      : null);
 
                   return (
                     <div
@@ -300,15 +425,19 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
                         isWorkingDay(date) ? "bg-white" : "bg-gray-50"
                       }`}
                       onClick={() => {
-                        if (!slot && isWorkingDay(date)) {
+                        if (!displaySlot && isWorkingDay(date)) {
                           createAvailabilitySlot(date, hour);
                         }
                       }}
                     >
-                      {slot ? (
+                      {displaySlot ? (
                         <AvailabilitySlot
-                          slot={slot}
-                          onToggle={() => toggleSlotAvailability(slot.id)}
+                          slot={displaySlot}
+                          onToggle={
+                            displaySlot.isEvent
+                              ? null
+                              : () => toggleSlotAvailability(displaySlot.id)
+                          }
                         />
                       ) : isWorkingDay(date) ? (
                         <div className="h-full w-full flex items-center justify-center text-gray-300 cursor-pointer hover:bg-gray-50">
@@ -376,43 +505,63 @@ const CalendarView = ({ connectedCalendars = [], onAddCalendar }) => {
         </div>
       </div>
 
-      {/* Calendar grid */}
-      <div className="border rounded-md bg-white overflow-hidden">
-        {renderCalendar()}
-      </div>
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md text-sm flex">
+          <AlertTriangle size={18} className="mr-2 flex-shrink-0 mt-0.5" />
+          <p>{error}</p>
+        </div>
+      )}
 
-      {/* Connected calendars section */}
-      <div className="mt-6">
-        <h3 className="text-lg font-semibold mb-2">Connected Calendars</h3>
-        {connectedCalendars.length > 0 ? (
-          <div className="space-y-2">
-            {connectedCalendars.map((calendar) => (
-              <div
-                key={calendar.id}
-                className="flex items-center justify-between p-3 border rounded-md"
-              >
-                <div className="flex items-center">
+      {/* Loading indicator */}
+      {isLoading ? (
+        <div className="text-center py-12">
+          <Loader size={24} className="animate-spin mx-auto mb-2" />
+          <p>Loading calendar data...</p>
+        </div>
+      ) : (
+        <>
+          {/* Calendar grid */}
+          <div className="border rounded-md bg-white overflow-hidden">
+            {renderCalendar()}
+          </div>
+
+          {/* Connected calendars section */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Connected Calendars</h3>
+            {connectedCalendars.length > 0 ? (
+              <div className="space-y-2">
+                {connectedCalendars.map((calendar) => (
                   <div
-                    className={`w-3 h-3 rounded-full bg-${calendar.color} mr-3`}
-                  ></div>
-                  <span>{calendar.name}</span>
-                </div>
-                <div className="text-sm text-gray-500">{calendar.email}</div>
+                    key={calendar.id}
+                    className="flex items-center justify-between p-3 border rounded-md"
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-3 h-3 rounded-full bg-${calendar.color} mr-3`}
+                      ></div>
+                      <span>{calendar.name}</span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {calendar.email || ""}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="border rounded-md p-4 text-center">
+                <p className="text-gray-500 mb-4">No calendars connected</p>
+                <button
+                  className="bg-primary text-white px-4 py-2 rounded-md"
+                  onClick={onAddCalendar}
+                >
+                  Connect Calendar
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="border rounded-md p-4 text-center">
-            <p className="text-gray-500 mb-4">No calendars connected</p>
-            <button
-              className="bg-primary text-white px-4 py-2 rounded-md"
-              onClick={onAddCalendar}
-            >
-              Connect Calendar
-            </button>
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 };
