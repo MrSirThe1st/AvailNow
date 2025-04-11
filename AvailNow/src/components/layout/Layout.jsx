@@ -2,15 +2,22 @@ import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
+import { useClerkUser } from "../../hooks/useClerkUser";
 
 const Layout = () => {
+  const { supabaseUser, loading } = useClerkUser();
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <div className="flex flex-1">
         <Sidebar />
         <main className="flex-1 p-6 bg-gray-50">
-          <Outlet />
+          {loading ? (
+            <div>Loading...</div>
+          ) : (
+            <Outlet context={{ supabaseUser }} />
+          )}
         </main>
       </div>
       <Footer />

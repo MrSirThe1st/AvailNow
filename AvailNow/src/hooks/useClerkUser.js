@@ -1,54 +1,64 @@
 // src/hooks/useClerkUser.js
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../lib/supabase";
 
 export function useClerkUser() {
   const { isLoaded, isSignedIn, user } = useUser();
   const [supabaseUser, setSupabaseUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
+    if (!isLoaded) {
       setLoading(false);
       return;
     }
 
     const syncUserWithSupabase = async () => {
       try {
-        // Check if user exists in Supabase
-        const { data, error } = await supabase
+        if (!isSignedIn || !user) {
+          setSupabaseUser(null);
+          return;
+        }
+
+        // Use upsert to handle both create and update in one operation
+        const { data, error: supabaseError } = await supabase
           .from("users")
-          .select("*")
-          .eq("clerk_id", user.id)
+          .upsert(
+            {
+              clerk_id: user.id,
+              email: user.primaryEmailAddress?.emailAddress,
+              name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+            },
+            {
+              onConflict: "clerk_id", // This is the key to avoid duplicates
+              ignoreDuplicates: false, // Set to true if you want to skip updates
+            }
+          )
+          .select()
           .single();
 
-        if (error && error.code !== "PGRST116") {
-          console.error("Error fetching user:", error);
+        if (supabaseError) {
+          throw supabaseError;
         }
 
-        if (!data) {
-          // Create new user in Supabase
-          const { data: newUser, error: createError } = await supabase
+        setSupabaseUser(data);
+      } catch (err) {
+        console.error("User sync error:", err);
+        setError(err);
+        
+        // Handle specific error cases
+        if (err.code === "23505") { // Unique violation
+          // Try to fetch the existing user
+          const { data } = await supabase
             .from("users")
-            .insert({
-              clerk_id: user.id,
-              email: user.primaryEmailAddress.emailAddress,
-              name: `${user.firstName} ${user.lastName}`.trim(),
-            })
-            .select()
+            .select("*")
+            .eq("clerk_id", user.id)
             .single();
-
-          if (createError) {
-            console.error("Error creating user:", createError);
-          } else {
-            setSupabaseUser(newUser);
-          }
-        } else {
-          setSupabaseUser(data);
+          
+          if (data) setSupabaseUser(data);
         }
-      } catch (error) {
-        console.error("Error in user sync:", error);
       } finally {
         setLoading(false);
       }
@@ -57,5 +67,5 @@ export function useClerkUser() {
     syncUserWithSupabase();
   }, [isLoaded, isSignedIn, user]);
 
-  return { isLoaded, isSignedIn, clerkUser: user, supabaseUser, loading };
+  return { isLoaded, isSignedIn, clerkUser: user, supabaseUser, loading, error };
 }
