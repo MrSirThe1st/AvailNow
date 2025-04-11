@@ -18,6 +18,8 @@ import Account from "./pages/Account";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
+// import WidgetPreview from "./pages/widgetPreview";
+import WidgetTest from "./pages/WidgetTest";
 
 function App() {
   const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -56,6 +58,10 @@ function App() {
           ),
         },
         {
+          path: "/widget-test",
+          element: <WidgetTest />,
+        },
+        {
           path: "widget",
           element: (
             <ProtectedRoute>
@@ -79,6 +85,10 @@ function App() {
             </ProtectedRoute>
           ),
         },
+        // {
+        //   path: "/widget-preview",
+        //   element: <WidgetPreview />,
+        // },
       ],
     },
     {

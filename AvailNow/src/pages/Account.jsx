@@ -1,6 +1,15 @@
-import React from 'react'
+import React from "react";
+import { useClerk } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
 
 const Account = () => {
+  const { signOut } = useClerk();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Account</h1>
@@ -78,6 +87,15 @@ const Account = () => {
             Change Password
           </button>
         </div>
+      </div>
+      <div className="mt-6 pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold mb-4">Session</h3>
+        <button
+          onClick={handleSignOut}
+          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
     </div>
   );
