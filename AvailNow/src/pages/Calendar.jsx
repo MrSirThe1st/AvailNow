@@ -32,26 +32,34 @@ const Calendar = () => {
       setIsLoading(true);
       setError(null);
 
+      console.log(
+        "Attempting to fetch calendar settings for user:",
+        supabaseUser.id
+      );
+
+      // Add proper headers
       const { data, error } = await supabase
         .from("calendar_settings")
         .select("*")
         .eq("user_id", supabaseUser.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid errors if no row exists
 
-      if (error && error.code !== "PGRST116") {
-        // PGRST116 is "no rows returned" error
+      console.log("Calendar settings query response:", { data, error });
+
+      if (error) {
         throw error;
       }
 
       if (data) {
         setBusinessHours({
-          startTime: data.availability_start_time.slice(0, 5), // Convert "09:00:00" to "09:00"
-          endTime: data.availability_end_time.slice(0, 5), // Convert "17:00:00" to "17:00"
+          startTime: data.availability_start_time.slice(0, 5),
+          endTime: data.availability_end_time.slice(0, 5),
           workingDays: data.working_days,
         });
       }
     } catch (err) {
       console.error("Error loading business hours:", err);
+      console.error("Full error details:", JSON.stringify(err, null, 2));
       setError("Failed to load settings. Please try again.");
     } finally {
       setIsLoading(false);
