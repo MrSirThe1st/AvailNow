@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useUser, useAuth } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
 import { Loader } from "lucide-react";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import { createClerkSupabaseClient } from "../lib/supabase";
+import { useSupabaseAuth } from "../lib/supabase";
 
 const Calendar = () => {
   const { user } = useUser();
-  const { getToken } = useAuth();
+  const { getSupabaseClient } = useSupabaseAuth();
   const [supabase, setSupabase] = useState(null);
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
@@ -22,14 +22,14 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize Supabase client with Clerk token
+  // Initialize Supabase client
   useEffect(() => {
     async function initSupabase() {
-      if (!getToken || !user) return;
+      if (!user) return;
 
       try {
-        const token = await getToken({ template: "supabase" });
-        const client = createClerkSupabaseClient(token);
+        console.log("Getting authenticated Supabase client...");
+        const client = await getSupabaseClient();
         setSupabase(client);
 
         // Now load settings
@@ -44,7 +44,7 @@ const Calendar = () => {
     }
 
     initSupabase();
-  }, [user, getToken]);
+  }, [user, getSupabaseClient]);
 
   // Load business hours
   const loadBusinessHours = async (client) => {
