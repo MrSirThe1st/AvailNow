@@ -270,34 +270,61 @@ export const disconnectCalendar = async (userId, provider) => {
  * @returns {Promise<void>}
  */
 export const saveSelectedCalendars = async (userId, selectedCalendars) => {
-  // Delete existing selections
-  const { error: deleteError } = await supabase
-    .from("selected_calendars")
-    .delete()
-    .eq("user_id", userId);
+  try {
+    console.log("Starting saveSelectedCalendars for user:", userId);
+    console.log("Calendars to save:", selectedCalendars);
 
-  if (deleteError) {
-    console.error("Failed to clear existing calendar selections:", deleteError);
-    throw new Error("Failed to save calendar selections");
-  }
-
-  // Insert new selections
-  if (selectedCalendars && selectedCalendars.length > 0) {
-    const calendarRecords = selectedCalendars.map((calendar) => ({
-      user_id: userId,
-      calendar_id: calendar.id,
-      provider: calendar.provider,
-      created_at: new Date().toISOString(),
-    }));
-
-    const { error: insertError } = await supabase
+    // Delete existing selections
+    console.log("Deleting existing calendar selections");
+    const { error: deleteError } = await supabase
       .from("selected_calendars")
-      .insert(calendarRecords);
+      .delete()
+      .eq("user_id", userId);
 
-    if (insertError) {
-      console.error("Failed to save selected calendars:", insertError);
+    if (deleteError) {
+      console.error(
+        "Failed to clear existing calendar selections:",
+        deleteError
+      );
+      console.error("Full delete error:", JSON.stringify(deleteError, null, 2));
       throw new Error("Failed to save calendar selections");
     }
+
+    // Insert new selections
+    if (selectedCalendars && selectedCalendars.length > 0) {
+      const calendarRecords = selectedCalendars.map((calendar) => ({
+        user_id: userId,
+        calendar_id: calendar.id,
+        provider: calendar.provider || "google", // Default to google if not specified
+        created_at: new Date().toISOString(),
+      }));
+
+      console.log("Inserting calendar records:", calendarRecords);
+
+      const { data, error: insertError } = await supabase
+        .from("selected_calendars")
+        .insert(calendarRecords)
+        .select();
+
+      if (insertError) {
+        console.error("Failed to save selected calendars:", insertError);
+        console.error(
+          "Full insert error:",
+          JSON.stringify(insertError, null, 2)
+        );
+        throw new Error("Failed to save calendar selections");
+      }
+
+      console.log("Successfully saved calendars, response:", data);
+      return data;
+    } else {
+      console.log("No calendars to save");
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error in saveSelectedCalendars:", error);
+    throw error;
   }
 };
 

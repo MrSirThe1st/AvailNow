@@ -78,9 +78,14 @@ const CalendarView = ({ onAddCalendar }) => {
       setIsLoading(true);
       setError(null);
 
-      // Get connected calendars
-      const calendars = await getConnectedCalendars(supabaseUser.id);
-      setConnectedCalendars(calendars);
+      // If we already have calendars passed as props from parent component
+      if (connectedCalendars && connectedCalendars.length > 0) {
+        // Use the already provided calendars
+      } else {
+        // Otherwise load them from the database
+        const calendars = await getConnectedCalendars(supabaseUser.id);
+        setConnectedCalendars(calendars);
+      }
 
       // Get selected calendar IDs
       const selectedCalendars = await getSelectedCalendars(supabaseUser.id);

@@ -75,21 +75,34 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       setLoading(true);
       setError(null);
 
+      console.log("Processing OAuth callback for provider:", provider);
+      console.log("OAuth parameters:", {
+        code: params.code ? "PRESENT" : "MISSING",
+        state: params.state,
+      });
+      console.log("User ID:", supabaseUser.id);
+
       // Get the selected provider object
       const providerObj = calendarProviders.find((p) => p.id === provider);
       setSelectedProvider(providerObj);
 
       // Handle the callback
+      console.log("Calling handleCalendarCallback...");
       const result = await handleCalendarCallback(
         provider,
         params,
         supabaseUser.id
       );
+      console.log("Result from handleCalendarCallback:", result);
+      console.log("Calendars returned:", result.calendars);
 
       // Set the connected calendars
-      setConnectedCalendars(
-        result.calendars.map((cal) => ({ ...cal, selected: true }))
-      );
+      const calendarsWithSelection = result.calendars.map((cal) => ({
+        ...cal,
+        selected: true,
+      }));
+      console.log("Setting calendars with selection:", calendarsWithSelection);
+      setConnectedCalendars(calendarsWithSelection);
 
       // Move to the configure step
       setStep("configure");
@@ -98,12 +111,85 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       localStorage.removeItem("calendarAuthProvider");
     } catch (err) {
       console.error("Error processing OAuth callback:", err);
+      console.error("Full error details:", JSON.stringify(err, null, 2));
       setError("Failed to connect to calendar service. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+
+  const finishIntegration = async () => {
+    try {
+      setLoading(true);
+
+      // Filter only selected calendars
+      const selectedCalendars = connectedCalendars.filter(
+        (cal) => cal.selected
+      );
+
+      console.log("Finishing integration process");
+      console.log("User ID:", supabaseUser.id);
+      console.log("Selected calendars:", selectedCalendars);
+
+      // Add this direct test to check permissions
+      try {
+        console.log("Testing direct insert to database");
+        const testData = {
+          user_id: supabaseUser.id,
+          calendar_id: "test-" + Date.now(),
+          provider: selectedProvider.id,
+          created_at: new Date().toISOString(),
+        };
+
+        const { supabase } = await import("../../lib/supabase");
+
+        const { data, error } = await supabase
+          .from("selected_calendars")
+          .insert(testData)
+          .select();
+
+        console.log("Test insert result:", { data, error });
+
+        if (error) {
+          console.error("Test insert failed:", error);
+        } else {
+          console.log("Test insert succeeded:", data);
+
+          // If test succeeded, try to clean it up
+          await supabase
+            .from("selected_calendars")
+            .delete()
+            .eq("calendar_id", testData.calendar_id);
+        }
+      } catch (testErr) {
+        console.error("Error during test insert:", testErr);
+      }
+
+      // Save the selected calendars to the database
+      console.log("Calling saveSelectedCalendars");
+      await saveSelectedCalendars(supabaseUser.id, selectedCalendars);
+      console.log("Successfully saved selected calendars");
+
+      // Call the success callback with the selected calendars
+      const enrichedCalendars = selectedCalendars.map((cal) => ({
+        ...cal,
+        provider: selectedProvider.id,
+        color: selectedProvider.color,
+      }));
+
+      console.log("Calling onSuccess with:", enrichedCalendars);
+      onSuccess(enrichedCalendars);
+    } catch (err) {
+      console.error("Error saving selected calendars:", err);
+      console.error("Full error details:", JSON.stringify(err, null, 2));
+      setError("Failed to save calendar selections. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  
   // Handle authorization with the selected provider
   const authorizeWithProvider = (provider) => {
     try {
@@ -135,33 +221,6 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
   };
 
   // Finish the integration process
-  const finishIntegration = async () => {
-    try {
-      setLoading(true);
-
-      // Filter only selected calendars
-      const selectedCalendars = connectedCalendars.filter(
-        (cal) => cal.selected
-      );
-
-      // Save the selected calendars to the database
-      await saveSelectedCalendars(supabaseUser.id, selectedCalendars);
-
-      // Call the success callback with the selected calendars
-      onSuccess(
-        selectedCalendars.map((cal) => ({
-          ...cal,
-          provider: selectedProvider.id,
-          color: selectedProvider.color,
-        }))
-      );
-    } catch (err) {
-      console.error("Error saving selected calendars:", err);
-      setError("Failed to save calendar selections. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Render the provider selection step
   const renderSelectStep = () => (

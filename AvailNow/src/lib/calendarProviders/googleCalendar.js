@@ -105,26 +105,46 @@ const storeGoogleTokens = async (userId, tokenData) => {
   const expiresAt = new Date();
   expiresAt.setSeconds(expiresAt.getSeconds() + expires_in);
 
+  console.log("Storing tokens for user:", userId);
+  console.log("Tokens data:", {
+    access_token: access_token ? "PRESENT" : "MISSING",
+    refresh_token: refresh_token ? "PRESENT" : "MISSING",
+    expires_at: expiresAt.toISOString(),
+  });
+
   // Store tokens in Supabase
   const { supabase } = await import("../supabase");
 
-  const { error } = await supabase.from("calendar_integrations").upsert(
-    {
-      user_id: userId,
-      provider: "google",
-      access_token,
-      refresh_token,
-      expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
+  const record = {
+    user_id: userId,
+    provider: "google",
+    access_token,
+    refresh_token,
+    expires_at: expiresAt.toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  console.log("Record to insert:", {
+    ...record,
+    access_token: "REDACTED",
+    refresh_token: "REDACTED",
+  });
+
+  const { data, error } = await supabase
+    .from("calendar_integrations")
+    .upsert(record, {
       onConflict: "user_id,provider",
-    }
-  );
+    })
+    .select();
 
   if (error) {
+    console.error("Error storing tokens:", error);
+    console.error("Full error:", JSON.stringify(error, null, 2));
     throw error;
   }
+
+  console.log("Successfully stored tokens, response:", data);
+  return data;
 };
 
 /**
