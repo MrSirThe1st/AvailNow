@@ -6,6 +6,9 @@ import {
 } from "@clerk/clerk-react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
+// Firebase
+import { auth } from "./lib/firebase";
+
 // Layouts
 import Layout from "./components/layout/Layout";
 
@@ -18,7 +21,6 @@ import Account from "./pages/Account";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
-// import WidgetPreview from "./pages/widgetPreview";
 import WidgetTest from "./pages/WidgetTest";
 
 function App() {
@@ -85,10 +87,6 @@ function App() {
             </ProtectedRoute>
           ),
         },
-        // {
-        //   path: "/widget-preview",
-        //   element: <WidgetPreview />,
-        // },
       ],
     },
     {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Calendar, User, Loader, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useClerkUser } from "../../hooks/useClerkUser";
 import {
   CALENDAR_PROVIDERS,
   initiateCalendarAuth,
@@ -10,10 +9,9 @@ import {
 } from "../../lib/calendarService";
 
 // This component handles the integration with external calendar services
-const CalendarIntegration = ({ onClose, onSuccess }) => {
+const CalendarIntegration = ({ onClose, onSuccess, userId }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { supabaseUser } = useClerkUser();
 
   const [step, setStep] = useState("select"); // 'select', 'authorize', 'configure'
   const [selectedProvider, setSelectedProvider] = useState(null);
@@ -57,7 +55,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     const provider = localStorage.getItem("calendarAuthProvider");
 
     // If we have a code and state, we're in the callback
-    if (code && state && provider && supabaseUser) {
+    if (code && state && provider && userId) {
       processOAuthCallback(provider, { code, state });
     }
 
@@ -67,7 +65,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       const path = location.pathname;
       navigate(path, { replace: true });
     }
-  }, [location, navigate, supabaseUser]);
+  }, [location, navigate, userId]);
 
   // Process OAuth callback
   const processOAuthCallback = async (provider, params) => {
@@ -80,7 +78,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         code: params.code ? "PRESENT" : "MISSING",
         state: params.state,
       });
-      console.log("User ID:", supabaseUser.id);
+      console.log("User ID:", userId);
 
       // Get the selected provider object
       const providerObj = calendarProviders.find((p) => p.id === provider);
@@ -88,11 +86,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
 
       // Handle the callback
       console.log("Calling handleCalendarCallback...");
-      const result = await handleCalendarCallback(
-        provider,
-        params,
-        supabaseUser.id
-      );
+      const result = await handleCalendarCallback(provider, params, userId);
       console.log("Result from handleCalendarCallback:", result);
       console.log("Calendars returned:", result.calendars);
 
@@ -118,7 +112,6 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     }
   };
 
-
   const finishIntegration = async () => {
     try {
       setLoading(true);
@@ -129,46 +122,12 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       );
 
       console.log("Finishing integration process");
-      console.log("User ID:", supabaseUser.id);
+      console.log("User ID:", userId);
       console.log("Selected calendars:", selectedCalendars);
-
-      // Add this direct test to check permissions
-      try {
-        console.log("Testing direct insert to database");
-        const testData = {
-          user_id: supabaseUser.id,
-          calendar_id: "test-" + Date.now(),
-          provider: selectedProvider.id,
-          created_at: new Date().toISOString(),
-        };
-
-        const { supabase } = await import("../../lib/supabase");
-
-        const { data, error } = await supabase
-          .from("selected_calendars")
-          .insert(testData)
-          .select();
-
-        console.log("Test insert result:", { data, error });
-
-        if (error) {
-          console.error("Test insert failed:", error);
-        } else {
-          console.log("Test insert succeeded:", data);
-
-          // If test succeeded, try to clean it up
-          await supabase
-            .from("selected_calendars")
-            .delete()
-            .eq("calendar_id", testData.calendar_id);
-        }
-      } catch (testErr) {
-        console.error("Error during test insert:", testErr);
-      }
 
       // Save the selected calendars to the database
       console.log("Calling saveSelectedCalendars");
-      await saveSelectedCalendars(supabaseUser.id, selectedCalendars);
+      await saveSelectedCalendars(userId, selectedCalendars);
       console.log("Successfully saved selected calendars");
 
       // Call the success callback with the selected calendars
@@ -189,7 +148,6 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     }
   };
 
-  
   // Handle authorization with the selected provider
   const authorizeWithProvider = (provider) => {
     try {
@@ -219,8 +177,6 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       )
     );
   };
-
-  // Finish the integration process
 
   // Render the provider selection step
   const renderSelectStep = () => (

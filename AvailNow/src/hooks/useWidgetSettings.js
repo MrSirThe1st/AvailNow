@@ -7,7 +7,7 @@ import {
 
 /**
  * Custom hook to manage widget settings
- * @param {string} userId - Supabase user ID
+ * @param {string} userId - User ID
  * @returns {Object} - Widget settings and methods to update them
  */
 export const useWidgetSettings = (userId) => {
@@ -16,7 +16,7 @@ export const useWidgetSettings = (userId) => {
   const [error, setError] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Load settings from the database
+  // Load settings from Firebase
   useEffect(() => {
     const loadSettings = async () => {
       if (!userId) return;
@@ -63,7 +63,7 @@ export const useWidgetSettings = (userId) => {
     setIsDirty(true);
   };
 
-  // Save settings to the database
+  // Save settings to Firebase
   const saveSettings = async () => {
     if (!userId) return;
 

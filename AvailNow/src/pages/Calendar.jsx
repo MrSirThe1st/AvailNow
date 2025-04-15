@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { useUser } from "@clerk/clerk-react";
+import { useClerkUser } from "../hooks/useClerkUser";
 import { Loader } from "lucide-react";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import { useSupabaseAuth } from "../lib/supabase";
+import {
+  getDocumentsByField,
+  createDocument,
+  updateDocument,
+  COLLECTIONS,
+} from "../lib/collections";
 
 const Calendar = () => {
-  const { user } = useUser();
-  const { getSupabaseClient } = useSupabaseAuth();
-  const [supabase, setSupabase] = useState(null);
+  const { user, firebaseUser } = useClerkUser();
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -22,46 +25,30 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize Supabase client
+  // Load data when firebase user is available
   useEffect(() => {
-    async function initSupabase() {
-      if (!user) return;
-
-      try {
-        console.log("Getting authenticated Supabase client...");
-        const client = await getSupabaseClient();
-        setSupabase(client);
-
-        // Now load settings
-        if (client) {
-          await loadBusinessHours(client);
-          await loadConnectedCalendars(client);
-        }
-      } catch (err) {
-        console.error("Error initializing Supabase client:", err);
-        setError("Authentication error. Please try signing out and back in.");
-      }
+    if (firebaseUser) {
+      loadBusinessHours();
+      loadConnectedCalendars();
     }
-
-    initSupabase();
-  }, [user, getSupabaseClient]);
+  }, [firebaseUser]);
 
   // Load business hours
-  const loadBusinessHours = async (client) => {
+  const loadBusinessHours = async () => {
+    if (!firebaseUser) return;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      const { data, error } = await client
-        .from("calendar_settings")
-        .select("*")
-        .single();
+      const settings = await getDocumentsByField(
+        COLLECTIONS.CALENDAR_SETTINGS,
+        "user_id",
+        firebaseUser.uid
+      );
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
-      }
-
-      if (data) {
+      if (settings && settings.length > 0) {
+        const data = settings[0];
         setCalendarSettings(data);
         setBusinessHours({
           startTime: data.availability_start_time.slice(0, 5),
@@ -81,15 +68,15 @@ const Calendar = () => {
   };
 
   // Load connected calendars
-  const loadConnectedCalendars = async (client) => {
-    try {
-      const { data, error } = await client
-        .from("calendar_integrations")
-        .select("*");
+  const loadConnectedCalendars = async () => {
+    if (!firebaseUser) return;
 
-      if (error) {
-        throw error;
-      }
+    try {
+      const data = await getDocumentsByField(
+        COLLECTIONS.CALENDAR_INTEGRATIONS,
+        "user_id",
+        firebaseUser.uid
+      );
 
       setConnectedCalendars(data || []);
     } catch (err) {
@@ -123,30 +110,53 @@ const Calendar = () => {
 
   // Save business hours
   const saveBusinessHours = async () => {
-    if (!supabase) return;
+    if (!firebaseUser) return;
 
     try {
       setIsSaving(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from("calendar_settings")
-        .upsert({
-          user_id: user.id,
-          availability_start_time: businessHours.startTime,
-          availability_end_time: businessHours.endTime,
-          working_days: businessHours.workingDays,
-          updated_at: new Date().toISOString(),
-        })
-        .select();
+      // Check if settings exist
+      const existingSettings = await getDocumentsByField(
+        COLLECTIONS.CALENDAR_SETTINGS,
+        "user_id",
+        firebaseUser.uid
+      );
 
-      if (error) {
-        throw error;
+      let result;
+
+      if (existingSettings && existingSettings.length > 0) {
+        // Update existing settings
+        result = await updateDocument(
+          COLLECTIONS.CALENDAR_SETTINGS,
+          existingSettings[0].id,
+          {
+            availability_start_time: businessHours.startTime,
+            availability_end_time: businessHours.endTime,
+            working_days: businessHours.workingDays,
+            updated_at: new Date().toISOString(),
+          }
+        );
+      } else {
+        // Create new settings
+        result = await createDocument(
+          COLLECTIONS.CALENDAR_SETTINGS,
+          null, // Let Firebase generate an ID
+          {
+            user_id: firebaseUser.uid,
+            availability_start_time: businessHours.startTime,
+            availability_end_time: businessHours.endTime,
+            working_days: businessHours.workingDays,
+            timezone: "UTC",
+            buffer_before: 0,
+            buffer_after: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        );
       }
 
-      if (data && data.length > 0) {
-        setCalendarSettings(data[0]);
-      }
+      setCalendarSettings(result);
     } catch (err) {
       console.error("Error saving business hours:", err);
       setError("Failed to save settings. Please try again.");
@@ -157,11 +167,9 @@ const Calendar = () => {
 
   // Handle adding new calendar integration
   const handleAddCalendar = async (newCalendars) => {
-    if (!supabase) return;
-
     try {
       // Refresh the list of connected calendars
-      await loadConnectedCalendars(supabase);
+      await loadConnectedCalendars();
       setShowCalendarModal(false);
     } catch (err) {
       console.error("Error handling new calendar:", err);
@@ -178,7 +186,7 @@ const Calendar = () => {
         <CalendarView
           connectedCalendars={connectedCalendars}
           onAddCalendar={() => setShowCalendarModal(true)}
-          supabaseClient={supabase}
+          firebaseUser={firebaseUser}
         />
 
         {/* Business Hours Settings */}
@@ -275,7 +283,7 @@ const Calendar = () => {
             <CalendarIntegration
               onClose={() => setShowCalendarModal(false)}
               onSuccess={handleAddCalendar}
-              supabaseClient={supabase}
+              userId={firebaseUser?.uid}
             />
           </div>
         </div>

@@ -5,7 +5,7 @@ import Footer from "./Footer";
 import { useClerkUser } from "../../hooks/useClerkUser";
 
 const Layout = () => {
-  const { supabaseUser, loading } = useClerkUser();
+  const { firebaseUser, loading } = useClerkUser();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -16,7 +16,7 @@ const Layout = () => {
           {loading ? (
             <div>Loading...</div>
           ) : (
-            <Outlet context={{ supabaseUser }} />
+            <Outlet context={{ firebaseUser }} />
           )}
         </main>
       </div>
