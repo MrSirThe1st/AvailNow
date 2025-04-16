@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useUser } from "@clerk/clerk-react";
 import { Loader } from "lucide-react";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import { createClerkSupabaseClient } from "../lib/supabase";
+import { useClerkUser } from "../hooks/useClerkUser";
 
 const Calendar = () => {
-  const { user } = useUser();
-  const [supabase, setSupabase] = useState(null);
+  const { user, supabaseClient, loading: authLoading } = useClerkUser();
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -21,48 +19,23 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize Supabase client
+  // Wait for supabaseClient to be available before loading data
   useEffect(() => {
-    async function initSupabase() {
-      if (!user) return;
-
-      try {
-        const client = createClerkSupabaseClient();
-
-        // Test the connection with a simple query
-        const { data, error } = await client
-          .from("calendar_settings")
-          .select("*")
-          .limit(1);
-
-        if (error) {
-          console.error("Error testing Supabase connection:", error);
-          throw error;
-        }
-
-        setSupabase(client);
-
-        // Now load settings
-        if (client) {
-          await loadBusinessHours(client);
-          await loadConnectedCalendars(client);
-        }
-      } catch (err) {
-        console.error("Error initializing Supabase client:", err);
-        setError("Authentication error. Please try signing out and back in.");
-      }
+    if (!authLoading && supabaseClient) {
+      loadBusinessHours();
+      loadConnectedCalendars();
     }
-
-    initSupabase();
-  }, [user]);
+  }, [authLoading, supabaseClient]);
 
   // Load business hours
-  const loadBusinessHours = async (client) => {
+  const loadBusinessHours = async () => {
+    if (!supabaseClient) return;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      const { data, error } = await client
+      const { data, error } = await supabaseClient
         .from("calendar_settings")
         .select("*")
         .single();
@@ -91,9 +64,11 @@ const Calendar = () => {
   };
 
   // Load connected calendars
-  const loadConnectedCalendars = async (client) => {
+  const loadConnectedCalendars = async () => {
+    if (!supabaseClient) return;
+
     try {
-      const { data, error } = await client
+      const { data, error } = await supabaseClient
         .from("calendar_integrations")
         .select("*");
 
@@ -133,13 +108,13 @@ const Calendar = () => {
 
   // Save business hours
   const saveBusinessHours = async () => {
-    if (!supabase || !user?.id) return;
+    if (!supabaseClient || !user?.id) return;
 
     try {
       setIsSaving(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("calendar_settings")
         .upsert({
           user_id: user.id,
@@ -167,11 +142,11 @@ const Calendar = () => {
 
   // Handle adding new calendar integration
   const handleAddCalendar = async (newCalendars) => {
-    if (!supabase) return;
+    if (!supabaseClient) return;
 
     try {
       // Refresh the list of connected calendars
-      await loadConnectedCalendars(supabase);
+      await loadConnectedCalendars();
       setShowCalendarModal(false);
     } catch (err) {
       console.error("Error handling new calendar:", err);
@@ -188,7 +163,7 @@ const Calendar = () => {
         <CalendarView
           connectedCalendars={connectedCalendars}
           onAddCalendar={() => setShowCalendarModal(true)}
-          supabaseClient={supabase}
+          supabaseClient={supabaseClient}
         />
 
         {/* Business Hours Settings */}
@@ -285,7 +260,7 @@ const Calendar = () => {
             <CalendarIntegration
               onClose={() => setShowCalendarModal(false)}
               onSuccess={handleAddCalendar}
-              supabaseClient={supabase}
+              supabaseClient={supabaseClient}
             />
           </div>
         </div>

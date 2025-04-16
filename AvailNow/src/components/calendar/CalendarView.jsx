@@ -40,7 +40,7 @@ const MONTHS = [
 ];
 
 const CalendarView = ({ onAddCalendar }) => {
-  const { supabaseUser } = useClerkUser();
+  const { user, supabaseClient } = useClerkUser();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("week"); // 'day', 'week', 'month'
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
@@ -60,36 +60,39 @@ const CalendarView = ({ onAddCalendar }) => {
 
   // Load connected calendars and selected calendars
   useEffect(() => {
-    if (supabaseUser) {
+    if (user) {
       loadCalendarData();
     }
-  }, [supabaseUser]);
+  }, [user]);
 
   // Load calendar events when date, view, or selected calendars change
   useEffect(() => {
-    if (supabaseUser && selectedCalendarIds.length > 0) {
+    if (user && selectedCalendarIds.length > 0) {
       loadCalendarEvents();
     }
-  }, [supabaseUser, currentDate, view, selectedCalendarIds]);
+  }, [user, currentDate, view, selectedCalendarIds]);
 
   // Load calendar data (connected calendars and selected calendars)
   const loadCalendarData = async () => {
+    if (!user?.id || !supabaseClient) return;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      // If we already have calendars passed as props from parent component
-      if (connectedCalendars && connectedCalendars.length > 0) {
-        // Use the already provided calendars
-      } else {
-        // Otherwise load them from the database
-        const calendars = await getConnectedCalendars(supabaseUser.id);
-        setConnectedCalendars(calendars);
-      }
+      const { data: calendars, error: calendarsError } = await supabaseClient
+        .from("calendar_integrations")
+        .select("*");
 
-      // Get selected calendar IDs
-      const selectedCalendars = await getSelectedCalendars(supabaseUser.id);
-      setSelectedCalendarIds(selectedCalendars);
+      if (calendarsError) throw calendarsError;
+      setConnectedCalendars(calendars || []);
+
+      const { data: selected, error: selectedError } = await supabaseClient
+        .from("selected_calendars")
+        .select("calendar_id");
+
+      if (selectedError) throw selectedError;
+      setSelectedCalendarIds(selected?.map((s) => s.calendar_id) || []);
     } catch (err) {
       console.error("Error loading calendar data:", err);
       setError("Failed to load calendar data. Please try again.");
@@ -100,24 +103,25 @@ const CalendarView = ({ onAddCalendar }) => {
 
   // Load calendar events for the current date range
   const loadCalendarEvents = async () => {
+    if (!user?.id || !supabaseClient || selectedCalendarIds.length === 0)
+      return;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      // Calculate date range based on current view
       const { startDate, endDate } = getDateRange();
 
-      // Fetch events for selected calendars
-      const events = await fetchEventsFromMultipleCalendars(
-        supabaseUser.id,
-        selectedCalendarIds,
-        startDate,
-        endDate
-      );
+      const { data: events, error } = await supabaseClient
+        .from("calendar_events")
+        .select("*")
+        .gte("start_time", startDate.toISOString())
+        .lte("end_time", endDate.toISOString())
+        .in("calendar_id", selectedCalendarIds);
 
-      setCalendarEvents(events);
+      if (error) throw error;
 
-      // Merge events with availability slots
+      setCalendarEvents(events || []);
       updateAvailabilityWithEvents(events);
     } catch (err) {
       console.error("Error loading calendar events:", err);

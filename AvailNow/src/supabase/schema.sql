@@ -75,90 +75,95 @@ ALTER TABLE public.selected_calendars ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_settings ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own calendar integrations" ON public.calendar_integrations;
+DROP POLICY IF EXISTS "Users can insert their own calendar integrations" ON public.calendar_integrations;
+DROP POLICY IF EXISTS "Users can update their own calendar integrations" ON public.calendar_integrations;
+DROP POLICY IF EXISTS "Users can delete their own calendar integrations" ON public.calendar_integrations;
+
+DROP POLICY IF EXISTS "Users can view their own selected calendars" ON public.selected_calendars;
+DROP POLICY IF EXISTS "Users can insert their own selected calendars" ON public.selected_calendars;
+DROP POLICY IF EXISTS "Users can delete their own selected calendars" ON public.selected_calendars;
+
+DROP POLICY IF EXISTS "Users can view their own calendar events" ON public.calendar_events;
+DROP POLICY IF EXISTS "Users can insert their own calendar events" ON public.calendar_events;
+DROP POLICY IF EXISTS "Users can update their own calendar events" ON public.calendar_events;
+DROP POLICY IF EXISTS "Users can delete their own calendar events" ON public.calendar_events;
+
+DROP POLICY IF EXISTS "Users can view their own calendar settings" ON public.calendar_settings;
+DROP POLICY IF EXISTS "Users can insert their own calendar settings" ON public.calendar_settings;
+DROP POLICY IF EXISTS "Users can update their own calendar settings" ON public.calendar_settings;
+
 -- Calendar integrations policies
 CREATE POLICY "Users can view their own calendar integrations"
-ON public.calendar_integrations
-FOR SELECT
+ON public.calendar_integrations FOR SELECT
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can insert their own calendar integrations"
-ON public.calendar_integrations
-FOR INSERT
+ON public.calendar_integrations FOR INSERT
 TO authenticated
-WITH CHECK ((auth.jwt() ->> 'sub') = user_id::text);
+WITH CHECK (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can update their own calendar integrations"
-ON public.calendar_integrations
-FOR UPDATE
+ON public.calendar_integrations FOR UPDATE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can delete their own calendar integrations"
-ON public.calendar_integrations
-FOR DELETE
+ON public.calendar_integrations FOR DELETE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 -- Selected calendars policies
 CREATE POLICY "Users can view their own selected calendars"
-ON public.selected_calendars
-FOR SELECT
+ON public.selected_calendars FOR SELECT
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can insert their own selected calendars"
-ON public.selected_calendars
-FOR INSERT
+ON public.selected_calendars FOR INSERT
 TO authenticated
-WITH CHECK ((auth.jwt() ->> 'sub') = user_id::text);
+WITH CHECK (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can delete their own selected calendars"
-ON public.selected_calendars
-FOR DELETE
+ON public.selected_calendars FOR DELETE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 -- Calendar events security
 CREATE POLICY "Users can view their own calendar events"
-ON public.calendar_events
-FOR SELECT
+ON public.calendar_events FOR SELECT
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can insert their own calendar events"
-ON public.calendar_events
-FOR INSERT
+ON public.calendar_events FOR INSERT
 TO authenticated
-WITH CHECK ((auth.jwt() ->> 'sub') = user_id::text);
+WITH CHECK (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can update their own calendar events"
-ON public.calendar_events
-FOR UPDATE
+ON public.calendar_events FOR UPDATE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can delete their own calendar events"
-ON public.calendar_events
-FOR DELETE
+ON public.calendar_events FOR DELETE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 -- Calendar settings policies
 CREATE POLICY "Users can view their own calendar settings"
-ON public.calendar_settings
-FOR SELECT
+ON public.calendar_settings FOR SELECT
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can insert their own calendar settings"
-ON public.calendar_settings
-FOR INSERT
+ON public.calendar_settings FOR INSERT
 TO authenticated
-WITH CHECK ((auth.jwt() ->> 'sub') = user_id::text);
+WITH CHECK (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can update their own calendar settings"
-ON public.calendar_settings
-FOR UPDATE
+ON public.calendar_settings FOR UPDATE
 TO authenticated
-USING ((auth.jwt() ->> 'sub') = user_id::text);
+USING (auth.uid()::text = user_id);
