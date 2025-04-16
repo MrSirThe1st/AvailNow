@@ -34,9 +34,9 @@ export function useSupabaseAuth() {
     }
   }, [client, getToken, isSignedIn]);
 
-  return { 
-    getSupabaseClient, 
+  return {
+    getSupabaseClient,
     error,
-    isInitialized: !!client 
+    isInitialized: !!client,
   };
 }

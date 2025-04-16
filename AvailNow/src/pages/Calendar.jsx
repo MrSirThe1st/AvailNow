@@ -28,8 +28,7 @@ const Calendar = () => {
       if (!getToken || !user) return;
 
       try {
-        const token = await getToken({ template: "supabase" });
-        const client = createClerkSupabaseClient(token);
+        const client = createClerkSupabaseClient(getToken);
         setSupabase(client);
 
         // Now load settings

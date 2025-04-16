@@ -20,11 +20,17 @@ export function createClerkSupabaseClient(getToken) {
           }
           return {
             Authorization: `Bearer ${token}`,
+            apikey: supabaseAnonKey,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
           };
         } catch (error) {
           console.error("Error getting Clerk token:", error);
-          // Return empty headers - will cause requests to use anonymous auth
-          return {};
+          return {
+            apikey: supabaseAnonKey,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          };
         }
       },
     },
