@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useUser, useAuth } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
 import { createClerkSupabaseClient } from "../lib/supabase";
 
 export function useClerkUser() {
   const { isLoaded, isSignedIn, user } = useUser();
-  const { getToken } = useAuth();
+  const [supabaseUser, setSupabaseUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -14,18 +14,20 @@ export function useClerkUser() {
       return;
     }
 
+    setSupabaseUser(user);
     setLoading(false);
   }, [isLoaded, isSignedIn, user]);
 
   async function getSupabaseClient() {
-    if (!getToken) return null;
-    return createClerkSupabaseClient(getToken);
+    if (!isSignedIn) return null;
+    return createClerkSupabaseClient();
   }
 
   return {
     isLoaded,
     isSignedIn,
     user,
+    supabaseUser,
     loading,
     error,
     getSupabaseClient,

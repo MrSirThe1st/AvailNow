@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useUser, useAuth } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
 import { Loader } from "lucide-react";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
@@ -8,7 +8,6 @@ import { createClerkSupabaseClient } from "../lib/supabase";
 
 const Calendar = () => {
   const { user } = useUser();
-  const { getToken } = useAuth();
   const [supabase, setSupabase] = useState(null);
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
@@ -22,13 +21,25 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize Supabase client with Clerk token
+  // Initialize Supabase client
   useEffect(() => {
     async function initSupabase() {
-      if (!getToken || !user) return;
+      if (!user) return;
 
       try {
-        const client = createClerkSupabaseClient(getToken);
+        const client = createClerkSupabaseClient();
+
+        // Test the connection with a simple query
+        const { data, error } = await client
+          .from("calendar_settings")
+          .select("*")
+          .limit(1);
+
+        if (error) {
+          console.error("Error testing Supabase connection:", error);
+          throw error;
+        }
+
         setSupabase(client);
 
         // Now load settings
@@ -43,7 +54,7 @@ const Calendar = () => {
     }
 
     initSupabase();
-  }, [user, getToken]);
+  }, [user]);
 
   // Load business hours
   const loadBusinessHours = async (client) => {
@@ -122,7 +133,7 @@ const Calendar = () => {
 
   // Save business hours
   const saveBusinessHours = async () => {
-    if (!supabase) return;
+    if (!supabase || !user?.id) return;
 
     try {
       setIsSaving(true);
