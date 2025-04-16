@@ -7,6 +7,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import AvailabilitySlot from "./AvailabilitySlot";
+import { useClerkUser } from "../../hooks/useClerkUser";
 import {
   getConnectedCalendars,
   fetchEventsFromMultipleCalendars,
@@ -38,14 +39,12 @@ const MONTHS = [
   "December",
 ];
 
-const CalendarView = ({
-  connectedCalendars = [],
-  onAddCalendar,
-  firebaseUser,
-}) => {
+const CalendarView = ({ onAddCalendar }) => {
+  const { supabaseUser } = useClerkUser();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("week"); // 'day', 'week', 'month'
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
+  const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [businessHours, setBusinessHours] = useState({
@@ -61,17 +60,17 @@ const CalendarView = ({
 
   // Load connected calendars and selected calendars
   useEffect(() => {
-    if (firebaseUser) {
+    if (supabaseUser) {
       loadCalendarData();
     }
-  }, [firebaseUser]);
+  }, [supabaseUser]);
 
   // Load calendar events when date, view, or selected calendars change
   useEffect(() => {
-    if (firebaseUser && selectedCalendarIds.length > 0) {
+    if (supabaseUser && selectedCalendarIds.length > 0) {
       loadCalendarEvents();
     }
-  }, [firebaseUser, currentDate, view, selectedCalendarIds]);
+  }, [supabaseUser, currentDate, view, selectedCalendarIds]);
 
   // Load calendar data (connected calendars and selected calendars)
   const loadCalendarData = async () => {
@@ -82,17 +81,15 @@ const CalendarView = ({
       // If we already have calendars passed as props from parent component
       if (connectedCalendars && connectedCalendars.length > 0) {
         // Use the already provided calendars
-      } else if (firebaseUser) {
+      } else {
         // Otherwise load them from the database
-        const calendars = await getConnectedCalendars(firebaseUser.uid);
+        const calendars = await getConnectedCalendars(supabaseUser.id);
         setConnectedCalendars(calendars);
       }
 
       // Get selected calendar IDs
-      if (firebaseUser) {
-        const selectedCalendars = await getSelectedCalendars(firebaseUser.uid);
-        setSelectedCalendarIds(selectedCalendars);
-      }
+      const selectedCalendars = await getSelectedCalendars(supabaseUser.id);
+      setSelectedCalendarIds(selectedCalendars);
     } catch (err) {
       console.error("Error loading calendar data:", err);
       setError("Failed to load calendar data. Please try again.");
@@ -112,7 +109,7 @@ const CalendarView = ({
 
       // Fetch events for selected calendars
       const events = await fetchEventsFromMultipleCalendars(
-        firebaseUser.uid,
+        supabaseUser.id,
         selectedCalendarIds,
         startDate,
         endDate
@@ -309,13 +306,6 @@ const CalendarView = ({
     );
   };
 
-  // Delete a slot
-  const deleteSlot = (slotId) => {
-    setAvailabilitySlots(
-      availabilitySlots.filter((slot) => slot.id !== slotId)
-    );
-  };
-
   // Render the calendar based on the current view
   const renderCalendar = () => {
     const dates = getDatesForView();
@@ -376,7 +366,6 @@ const CalendarView = ({
                         key={slot.id}
                         slot={slot}
                         onToggle={() => toggleSlotAvailability(slot.id)}
-                        onDelete={() => deleteSlot(slot.id)}
                         compact={true}
                       />
                     ))}
@@ -453,11 +442,6 @@ const CalendarView = ({
                             displaySlot.isEvent
                               ? null
                               : () => toggleSlotAvailability(displaySlot.id)
-                          }
-                          onDelete={
-                            displaySlot.isEvent
-                              ? null
-                              : () => deleteSlot(displaySlot.id)
                           }
                         />
                       ) : isWorkingDay(date) ? (
@@ -550,7 +534,7 @@ const CalendarView = ({
           {/* Connected calendars section */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Connected Calendars</h3>
-            {connectedCalendars && connectedCalendars.length > 0 ? (
+            {connectedCalendars.length > 0 ? (
               <div className="space-y-2">
                 {connectedCalendars.map((calendar) => (
                   <div
@@ -559,7 +543,7 @@ const CalendarView = ({
                   >
                     <div className="flex items-center">
                       <div
-                        className={`w-3 h-3 rounded-full bg-${calendar.color || "blue-500"} mr-3`}
+                        className={`w-3 h-3 rounded-full bg-${calendar.color} mr-3`}
                       ></div>
                       <span>{calendar.name}</span>
                     </div>

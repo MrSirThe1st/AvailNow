@@ -1,11 +1,4 @@
 // src/lib/calendarProviders/googleCalendar.js
-import {
-  getDocumentsByField,
-  createDocument,
-  updateDocument,
-  deleteDocument,
-  COLLECTIONS,
-} from "../collections";
 
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -54,7 +47,7 @@ export const handleGoogleCallback = async (code, state, userId) => {
   // Exchange code for tokens
   const tokenResponse = await fetchGoogleTokens(code);
 
-  // Store tokens in Firebase
+  // Store tokens in Supabase
   await storeGoogleTokens(userId, tokenResponse);
 
   // Fetch user's calendars
@@ -100,7 +93,7 @@ const fetchGoogleTokens = async (code) => {
 };
 
 /**
- * Store Google OAuth tokens in Firebase
+ * Store Google OAuth tokens in Supabase
  * @param {string} userId - User ID
  * @param {Object} tokenData - Token response from Google
  * @returns {Promise<void>}
@@ -119,16 +112,8 @@ const storeGoogleTokens = async (userId, tokenData) => {
     expires_at: expiresAt.toISOString(),
   });
 
-  // Check if integration already exists
-  const existingIntegrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "user_id",
-    userId
-  );
-
-  const existingGoogleIntegration = existingIntegrations.find(
-    (int) => int.provider === "google"
-  );
+  // Store tokens in Supabase
+  const { supabase } = await import("../supabase");
 
   const record = {
     user_id: userId,
@@ -145,26 +130,21 @@ const storeGoogleTokens = async (userId, tokenData) => {
     refresh_token: "REDACTED",
   });
 
-  let result;
+  const { data, error } = await supabase
+    .from("calendar_integrations")
+    .upsert(record, {
+      onConflict: "user_id,provider",
+    })
+    .select();
 
-  if (existingGoogleIntegration) {
-    // Update existing record
-    result = await updateDocument(
-      COLLECTIONS.CALENDAR_INTEGRATIONS,
-      existingGoogleIntegration.id,
-      record
-    );
-  } else {
-    // Create new record
-    result = await createDocument(
-      COLLECTIONS.CALENDAR_INTEGRATIONS,
-      null, // Let Firebase generate an ID
-      record
-    );
+  if (error) {
+    console.error("Error storing tokens:", error);
+    console.error("Full error:", JSON.stringify(error, null, 2));
+    throw error;
   }
 
-  console.log("Successfully stored tokens, response:", result);
-  return result;
+  console.log("Successfully stored tokens, response:", data);
+  return data;
 };
 
 /**
@@ -217,13 +197,18 @@ export const fetchGoogleEvents = async (
   endDate
 ) => {
   // Get the user's access token
-  const integrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "user_id",
-    userId
-  );
+  const { supabase } = await import("../supabase");
 
-  const integration = integrations.find((int) => int.provider === "google");
+  const { data: integration, error } = await supabase
+    .from("calendar_integrations")
+    .select("access_token, refresh_token, expires_at")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .single();
+
+  if (error) {
+    throw error;
+  }
 
   if (!integration) {
     throw new Error("Google Calendar integration not found");
@@ -312,25 +297,17 @@ const refreshGoogleToken = async (refreshToken) => {
   expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
   // Update token in database
-  // First find the integration with this refresh token
-  const integrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "provider",
-    "google"
-  );
+  const { supabase } = await import("../supabase");
 
-  // Find the one with matching refresh token
-  const integration = integrations.find(
-    (int) => int.refresh_token === refreshToken
-  );
-
-  if (integration) {
-    await updateDocument(COLLECTIONS.CALENDAR_INTEGRATIONS, integration.id, {
+  await supabase
+    .from("calendar_integrations")
+    .update({
       access_token: tokenData.access_token,
       expires_at: expiresAt.toISOString(),
       updated_at: new Date().toISOString(),
-    });
-  }
+    })
+    .eq("provider", "google")
+    .eq("refresh_token", refreshToken);
 
   return tokenData;
 };
@@ -341,21 +318,25 @@ const refreshGoogleToken = async (refreshToken) => {
  * @returns {Promise<void>}
  */
 export const disconnectGoogleCalendar = async (userId) => {
+  const { supabase } = await import("../supabase");
+
   // Get the integration to revoke access token
-  const integrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "user_id",
-    userId
-  );
+  const { data: integration, error } = await supabase
+    .from("calendar_integrations")
+    .select("access_token")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .single();
 
-  const googleIntegration = integrations.find(
-    (int) => int.provider === "google"
-  );
+  if (error && error.code !== "PGRST116") {
+    // Not found
+    throw error;
+  }
 
-  if (googleIntegration?.access_token) {
+  if (integration?.access_token) {
     // Revoke access token with Google
     await fetch(
-      `https://oauth2.googleapis.com/revoke?token=${googleIntegration.access_token}`,
+      `https://oauth2.googleapis.com/revoke?token=${integration.access_token}`,
       {
         method: "POST",
         headers: {
@@ -366,10 +347,13 @@ export const disconnectGoogleCalendar = async (userId) => {
   }
 
   // Delete integration from database
-  if (googleIntegration) {
-    await deleteDocument(
-      COLLECTIONS.CALENDAR_INTEGRATIONS,
-      googleIntegration.id
-    );
+  const { error: deleteError } = await supabase
+    .from("calendar_integrations")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", "google");
+
+  if (deleteError) {
+    throw deleteError;
   }
 };

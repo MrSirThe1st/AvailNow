@@ -1,11 +1,9 @@
-import {
-  getDocumentsByField,
-  createDocument,
-  getDocumentById,
-  updateDocument,
-  deleteDocument,
-  COLLECTIONS,
-} from "./collections";
+/**
+ * Calendar Service
+ * Centralized service for managing calendar integrations across different providers
+ */
+
+import { supabase } from "./supabase";
 import * as googleCalendar from "./calendarProviders/googleCalendar";
 // Import other calendar providers as they're implemented
 // import * as outlookCalendar from "./calendarProviders/outlookCalendar";
@@ -86,11 +84,15 @@ export const handleCalendarCallback = async (provider, params, userId) => {
  */
 export const getConnectedCalendars = async (userId) => {
   // Get all calendar integrations
-  const integrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "user_id",
-    userId
-  );
+  const { data: integrations, error } = await supabase
+    .from("calendar_integrations")
+    .select("provider")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Failed to fetch calendar integrations:", error);
+    throw new Error("Failed to fetch calendar integrations");
+  }
 
   if (!integrations || integrations.length === 0) {
     return [];
@@ -123,15 +125,14 @@ export const getConnectedCalendars = async (userId) => {
  */
 export const fetchCalendars = async (userId, provider) => {
   // Get the access token for this provider
-  const integrations = await getDocumentsByField(
-    COLLECTIONS.CALENDAR_INTEGRATIONS,
-    "user_id",
-    userId
-  );
+  const { data: integration, error } = await supabase
+    .from("calendar_integrations")
+    .select("access_token")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .single();
 
-  const integration = integrations.find((int) => int.provider === provider);
-
-  if (!integration) {
+  if (error || !integration) {
     throw new Error(`Calendar integration for ${provider} not found`);
   }
 
@@ -273,41 +274,49 @@ export const saveSelectedCalendars = async (userId, selectedCalendars) => {
     console.log("Starting saveSelectedCalendars for user:", userId);
     console.log("Calendars to save:", selectedCalendars);
 
-    // Delete existing selections - first get them
-    const existingCalendars = await getDocumentsByField(
-      COLLECTIONS.SELECTED_CALENDARS,
-      "user_id",
-      userId
-    );
+    // Delete existing selections
+    console.log("Deleting existing calendar selections");
+    const { error: deleteError } = await supabase
+      .from("selected_calendars")
+      .delete()
+      .eq("user_id", userId);
 
-    // Then delete each one
-    for (const calendar of existingCalendars) {
-      await deleteDocument(COLLECTIONS.SELECTED_CALENDARS, calendar.id);
+    if (deleteError) {
+      console.error(
+        "Failed to clear existing calendar selections:",
+        deleteError
+      );
+      console.error("Full delete error:", JSON.stringify(deleteError, null, 2));
+      throw new Error("Failed to save calendar selections");
     }
 
     // Insert new selections
     if (selectedCalendars && selectedCalendars.length > 0) {
-      const savedCalendars = [];
+      const calendarRecords = selectedCalendars.map((calendar) => ({
+        user_id: userId,
+        calendar_id: calendar.id,
+        provider: calendar.provider || "google", // Default to google if not specified
+        created_at: new Date().toISOString(),
+      }));
 
-      for (const calendar of selectedCalendars) {
-        const calendarData = {
-          user_id: userId,
-          calendar_id: calendar.id,
-          provider: calendar.provider || "google", // Default to google if not specified
-          created_at: new Date().toISOString(),
-        };
+      console.log("Inserting calendar records:", calendarRecords);
 
-        const saved = await createDocument(
-          COLLECTIONS.SELECTED_CALENDARS,
-          null, // Generate a Firebase ID
-          calendarData
+      const { data, error: insertError } = await supabase
+        .from("selected_calendars")
+        .insert(calendarRecords)
+        .select();
+
+      if (insertError) {
+        console.error("Failed to save selected calendars:", insertError);
+        console.error(
+          "Full insert error:",
+          JSON.stringify(insertError, null, 2)
         );
-
-        savedCalendars.push(saved);
+        throw new Error("Failed to save calendar selections");
       }
 
-      console.log("Successfully saved calendars, response:", savedCalendars);
-      return savedCalendars;
+      console.log("Successfully saved calendars, response:", data);
+      return data;
     } else {
       console.log("No calendars to save");
     }
@@ -325,14 +334,15 @@ export const saveSelectedCalendars = async (userId, selectedCalendars) => {
  * @returns {Promise<Array>} List of selected calendar IDs with providers
  */
 export const getSelectedCalendars = async (userId) => {
-  const calendars = await getDocumentsByField(
-    COLLECTIONS.SELECTED_CALENDARS,
-    "user_id",
-    userId
-  );
+  const { data, error } = await supabase
+    .from("selected_calendars")
+    .select("calendar_id, provider")
+    .eq("user_id", userId);
 
-  return calendars.map((cal) => ({
-    calendar_id: cal.calendar_id,
-    provider: cal.provider,
-  }));
+  if (error) {
+    console.error("Failed to fetch selected calendars:", error);
+    throw new Error("Failed to fetch selected calendars");
+  }
+
+  return data || [];
 };

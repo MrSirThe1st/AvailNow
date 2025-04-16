@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { useUser, useAuth } from "@clerk/clerk-react";
-import { signInWithClerk, auth } from "../lib/firebase";
+import { createClerkSupabaseClient } from "../lib/supabase";
 
 export function useClerkUser() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [firebaseUser, setFirebaseUser] = useState(null);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
@@ -15,41 +14,20 @@ export function useClerkUser() {
       return;
     }
 
-    const setupFirebaseAuth = async () => {
-      try {
-        // Sign in to Firebase with Clerk token
-        const fbUser = await signInWithClerk(getToken);
-        setFirebaseUser(fbUser);
-      } catch (err) {
-        console.error("Error authenticating with Firebase:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(false);
+  }, [isLoaded, isSignedIn, user]);
 
-    setupFirebaseAuth();
-  }, [isLoaded, isSignedIn, user, getToken]);
-
-  // Listen to Firebase auth state changes
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setFirebaseUser(user);
-      } else {
-        setFirebaseUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  async function getSupabaseClient() {
+    if (!getToken) return null;
+    return createClerkSupabaseClient(getToken);
+  }
 
   return {
     isLoaded,
     isSignedIn,
     user,
-    firebaseUser,
     loading,
     error,
+    getSupabaseClient,
   };
 }
