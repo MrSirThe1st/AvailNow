@@ -7,23 +7,32 @@ export function useClerkUser() {
   const { getToken } = useAuth();
   const [supabaseClient, setSupabaseClient] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
+    if (!isLoaded) {
       setLoading(false);
       return;
     }
 
-    try {
-      const client = createClerkSupabaseClient(getToken);
-      setSupabaseClient(client);
-    } catch (err) {
-      console.error("Error initializing Supabase client:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    const initSupabase = async () => {
+      try {
+        if (isSignedIn) {
+          const client = createClerkSupabaseClient(() =>
+            getToken({ template: "supabase" })
+          );
+          setSupabaseClient(client);
+        } else {
+          setSupabaseClient(null);
+        }
+      } catch (err) {
+        console.error("Error initializing Supabase client:", err);
+        setSupabaseClient(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initSupabase();
   }, [isLoaded, isSignedIn, getToken]);
 
   return {
@@ -32,6 +41,5 @@ export function useClerkUser() {
     user,
     supabaseClient,
     loading,
-    error,
   };
 }
