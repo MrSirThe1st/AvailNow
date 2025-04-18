@@ -10,22 +10,27 @@ export function useClerkUser() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoaded) {
-      return;
-    }
-
     const initializeSupabase = async () => {
+      if (!isLoaded || !isSignedIn) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        if (isSignedIn) {
-          // Create a Supabase client that uses the Clerk session token
-          const client = createClerkSupabaseClient(() => getToken());
-          setSupabaseClient(client);
-        } else {
-          setSupabaseClient(null);
+        // Get the session token from Clerk
+        const token = await getToken();
+
+        if (!token) {
+          console.warn("No token returned from Clerk");
+          setLoading(false);
+          return;
         }
+
+        // Create a Supabase client with the Clerk token
+        const client = createClerkSupabaseClient(token);
+        setSupabaseClient(client);
       } catch (err) {
         console.error("Error initializing Supabase client:", err);
-        setSupabaseClient(null);
       } finally {
         setLoading(false);
       }

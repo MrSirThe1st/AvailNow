@@ -12,22 +12,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * @param {function} getToken - Function to get the Clerk session token
  * @returns {Object} Supabase client
  */
-export function createClerkSupabaseClient(getToken) {
+export function createClerkSupabaseClient(session) {
   return createClient(supabaseUrl, supabaseAnonKey, {
     global: {
-      async headers() {
-        const token = await getToken();
-        if (!token) return {};
-
-        return {
-          Authorization: `Bearer ${token}`,
-        };
-      },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+      headers: {
+        Authorization: `Bearer ${session}`
+      }
+    }
   });
 }
