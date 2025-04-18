@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Calendar, User, Loader, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useClerkUser } from "../../hooks/useClerkUser";
 import {
   CALENDAR_PROVIDERS,
   initiateCalendarAuth,
@@ -12,7 +11,7 @@ import {
 const CalendarIntegration = ({ onClose, onSuccess }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, supabaseClient } = useClerkUser();
+  const [userData, setUserData] = useState(null);
 
   const [step, setStep] = useState("select");
   const [selectedProvider, setSelectedProvider] = useState(null);
@@ -48,6 +47,30 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     },
   ];
 
+  // Retrieve user from clerk on mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        // Directly import clerk to get the user
+        const { getAuth } = await import("@clerk/clerk-react");
+        const auth = getAuth();
+
+        if (auth && auth.userId) {
+          setUserData({
+            id: auth.userId,
+          });
+          console.log("User authenticated:", auth.userId);
+        } else {
+          console.error("No authenticated user found");
+        }
+      } catch (err) {
+        console.error("Error loading user data:", err);
+      }
+    };
+
+    loadUserData();
+  }, []);
+
   // Check for OAuth callback parameters
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -55,25 +78,50 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     const state = searchParams.get("state");
     const provider = localStorage.getItem("calendarAuthProvider");
 
-    if (code && state && provider && user) {
-      processOAuthCallback(provider, { code, state });
+    console.log("Checking OAuth callback params:", { code, state, provider });
+
+    if (code && state && provider) {
+      // Make sure we have a user before processing
+      if (userData && userData.id) {
+        console.log("Processing OAuth callback with user:", userData.id);
+        processOAuthCallback(provider, { code, state });
+      } else {
+        console.log("Waiting for user data before processing OAuth callback");
+      }
     }
 
     // Clean up URL
     if (code || state) {
+      console.log("Cleaning up URL params");
       navigate(location.pathname, { replace: true });
     }
-  }, [location, navigate, user]);
+  }, [location, navigate, userData]);
 
   const processOAuthCallback = async (provider, params) => {
     try {
+      console.log("Processing OAuth callback:", provider, params);
       setLoading(true);
       setError(null);
 
       const providerObj = calendarProviders.find((p) => p.id === provider);
       setSelectedProvider(providerObj);
 
-      const result = await handleCalendarCallback(provider, params, user.id);
+      console.log(
+        "Calling handleCalendarCallback with:",
+        provider,
+        params,
+        userData.id
+      );
+      const result = await handleCalendarCallback(
+        provider,
+        params,
+        userData.id
+      );
+      console.log("OAuth callback result:", result);
+
+      if (!result || !result.calendars) {
+        throw new Error("Failed to get calendars from provider");
+      }
 
       const calendarsWithSelection = result.calendars.map((cal) => ({
         ...cal,
@@ -85,7 +133,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       localStorage.removeItem("calendarAuthProvider");
     } catch (err) {
       console.error("Error processing OAuth callback:", err);
-      setError("Failed to connect to calendar service. Please try again.");
+      setError(`Failed to connect to calendar service: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -100,8 +148,15 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         (cal) => cal.selected
       );
 
+      if (!userData || !userData.id) {
+        throw new Error("No user found");
+      }
+
+      console.log("Saving selected calendars for user:", userData.id);
+      console.log("Selected calendars:", selectedCalendars);
+
       // Save the selected calendars
-      await saveSelectedCalendars(user.id, selectedCalendars);
+      await saveSelectedCalendars(userData.id, selectedCalendars);
 
       const enrichedCalendars = selectedCalendars.map((cal) => ({
         ...cal,
@@ -113,7 +168,7 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       onClose();
     } catch (err) {
       console.error("Error saving selected calendars:", err);
-      setError("Failed to save calendar selections. Please try again.");
+      setError(`Failed to save calendar selections: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -124,12 +179,17 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       setLoading(true);
       setError(null);
 
+      console.log("Authorizing with provider:", provider.id);
       localStorage.setItem("calendarAuthProvider", provider.id);
+
       const authUrl = initiateCalendarAuth(provider.id);
+      console.log("Generated auth URL:", authUrl);
+
+      // Redirect to the authorization URL
       window.location.href = authUrl;
     } catch (err) {
       console.error("Error initiating authorization:", err);
-      setError(`Failed to connect to ${provider.name}. ${err.message}`);
+      setError(`Failed to connect to ${provider.name}: ${err.message}`);
       setLoading(false);
     }
   };
@@ -229,13 +289,15 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         <button
           className="px-4 py-2 bg-primary text-white rounded-md flex items-center"
           onClick={() => authorizeWithProvider(selectedProvider)}
-          disabled={loading}
+          disabled={loading || !userData}
         >
           {loading ? (
             <>
               <span className="mr-2">Connecting...</span>
               <Loader size={16} className="animate-spin" />
             </>
+          ) : !userData ? (
+            <>Loading user data...</>
           ) : (
             <>Connect to {selectedProvider.name}</>
           )}
@@ -343,6 +405,21 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
           <X size={20} />
         </button>
       </div>
+
+      {/* Debug info */}
+      {error && (
+        <div className="mb-4 p-2 border border-red-300 bg-red-50 rounded text-xs">
+          <strong>Debug Info:</strong>
+          <br />
+          Error: {error}
+          <br />
+          User ID: {userData?.id || "Not loaded"}
+          <br />
+          Provider: {selectedProvider?.id || "None selected"}
+          <br />
+          Step: {step}
+        </div>
+      )}
 
       {step === "select" && renderSelectStep()}
       {step === "authorize" && renderAuthorizeStep()}

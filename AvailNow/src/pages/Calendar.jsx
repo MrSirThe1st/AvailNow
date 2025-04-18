@@ -22,29 +22,29 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   // Add this new useEffect hook after your existing hooks
-useEffect(() => {
-  if (supabaseClient) {
-    debugJWT();
-  }
-}, [supabaseClient]);
+  useEffect(() => {
+    if (supabaseClient) {
+      debugJWT();
+    }
+  }, [supabaseClient]);
 
-   const debugJWT = async () => {
-     if (!supabaseClient) return;
+  const debugJWT = async () => {
+    if (!supabaseClient) return;
 
-     try {
-       const { data, error } = await supabaseClient.rpc("get_jwt_payload");
+    try {
+      const { data, error } = await supabaseClient.rpc("get_jwt_payload");
 
-       if (error) {
-         console.error("Error getting JWT payload:", error);
-         return;
-       }
+      if (error) {
+        console.error("Error getting JWT payload:", error);
+        return;
+      }
 
-       console.log("JWT payload:", data);
-       // Look for the 'sub' claim in the output
-     } catch (err) {
-       console.error("Error in JWT debug:", err);
-     }
-   };
+      console.log("JWT payload:", data);
+      // Look for the 'sub' claim in the output
+    } catch (err) {
+      console.error("Error in JWT debug:", err);
+    }
+  };
 
   // Load data when the component mounts and the Supabase client is available
   useEffect(() => {
@@ -143,13 +143,19 @@ useEffect(() => {
 
       const { data, error } = await supabaseClient
         .from("calendar_settings")
-        .upsert({
-          user_id: user.id,
-          availability_start_time: businessHours.startTime,
-          availability_end_time: businessHours.endTime,
-          working_days: businessHours.workingDays,
-          updated_at: new Date().toISOString(),
-        })
+        .upsert(
+          {
+            user_id: user.id,
+            availability_start_time: businessHours.startTime,
+            availability_end_time: businessHours.endTime,
+            working_days: businessHours.workingDays,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "user_id",
+            ignoreDuplicates: false,
+          }
+        )
         .select();
 
       if (error) {
@@ -172,7 +178,6 @@ useEffect(() => {
     if (!supabaseClient) return;
 
     try {
-      // Refresh the list of connected calendars
       await loadConnectedCalendars();
       setShowCalendarModal(false);
     } catch (err) {

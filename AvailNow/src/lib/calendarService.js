@@ -23,6 +23,7 @@ export const CALENDAR_PROVIDERS = {
  * @returns {string} Authorization URL to redirect the user to
  */
 export const initiateCalendarAuth = (provider) => {
+  console.log("Initiating auth for provider:", provider);
   switch (provider) {
     case CALENDAR_PROVIDERS.GOOGLE:
       return googleCalendar.initiateGoogleAuth();
@@ -51,15 +52,20 @@ export const initiateCalendarAuth = (provider) => {
  * @param {string} userId - User ID to associate with this integration
  * @returns {Promise<Object>} Connection response with tokens and calendars
  */
-export const handleCalendarCallback = async (provider, params, userId) => {
+export const handleCalendarCallback = async (
+  provider,
+  params,
+  userId,
+  supabaseClient
+) => {
   switch (provider) {
     case CALENDAR_PROVIDERS.GOOGLE:
       return googleCalendar.handleGoogleCallback(
         params.code,
         params.state,
-        userId
+        userId,
+        supabaseClient
       );
-
     case CALENDAR_PROVIDERS.OUTLOOK:
       // return outlookCalendar.handleOutlookCallback(params.code, params.state, userId);
       throw new Error("Outlook Calendar integration not yet implemented");
