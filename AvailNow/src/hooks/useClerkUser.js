@@ -1,3 +1,4 @@
+// src/hooks/useClerkUser.js
 import { useState, useEffect } from "react";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { createClerkSupabaseClient } from "../lib/supabase";
@@ -10,16 +11,14 @@ export function useClerkUser() {
 
   useEffect(() => {
     if (!isLoaded) {
-      setLoading(false);
       return;
     }
 
-    const initSupabase = async () => {
+    const initializeSupabase = async () => {
       try {
         if (isSignedIn) {
-          const client = createClerkSupabaseClient(() =>
-            getToken({ template: "supabase" })
-          );
+          // Create a Supabase client that uses the Clerk session token
+          const client = createClerkSupabaseClient(() => getToken());
           setSupabaseClient(client);
         } else {
           setSupabaseClient(null);
@@ -32,7 +31,7 @@ export function useClerkUser() {
       }
     };
 
-    initSupabase();
+    initializeSupabase();
   }, [isLoaded, isSignedIn, getToken]);
 
   return {

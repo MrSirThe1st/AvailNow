@@ -1,12 +1,15 @@
+// src/pages/Calendar.jsx
 import React, { useState, useEffect } from "react";
 import { Loader } from "lucide-react";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import { useClerkUser } from "../hooks/useClerkUser";
+import { useOutletContext } from "react-router-dom";
 
 const Calendar = () => {
-  const { user, supabaseClient, loading: authLoading } = useClerkUser();
+  // Get the user and Supabase client from the layout context
+  const { user, supabaseClient } = useOutletContext();
+
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -19,13 +22,13 @@ const Calendar = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Wait for supabaseClient to be available before loading data
+  // Load data when the component mounts and the Supabase client is available
   useEffect(() => {
-    if (!authLoading && supabaseClient) {
+    if (supabaseClient) {
       loadBusinessHours();
       loadConnectedCalendars();
     }
-  }, [authLoading, supabaseClient]);
+  }, [supabaseClient]);
 
   // Load business hours
   const loadBusinessHours = async () => {
@@ -164,6 +167,7 @@ const Calendar = () => {
           connectedCalendars={connectedCalendars}
           onAddCalendar={() => setShowCalendarModal(true)}
           supabaseClient={supabaseClient}
+          user={user}
         />
 
         {/* Business Hours Settings */}
@@ -261,6 +265,7 @@ const Calendar = () => {
               onClose={() => setShowCalendarModal(false)}
               onSuccess={handleAddCalendar}
               supabaseClient={supabaseClient}
+              user={user}
             />
           </div>
         </div>

@@ -1,3 +1,4 @@
+// src/components/calendar/CalendarView.jsx
 import React, { useState, useEffect } from "react";
 import {
   ChevronLeft,
@@ -7,12 +8,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import AvailabilitySlot from "./AvailabilitySlot";
-import { useClerkUser } from "../../hooks/useClerkUser";
-import {
-  getConnectedCalendars,
-  fetchEventsFromMultipleCalendars,
-  getSelectedCalendars,
-} from "../../lib/calendarService";
 import { mergeAvailabilityWithEvents } from "../../lib/calendarUtils";
 
 const DAYS = [
@@ -39,8 +34,7 @@ const MONTHS = [
   "December",
 ];
 
-const CalendarView = ({ onAddCalendar }) => {
-  const { user, supabaseClient } = useClerkUser();
+const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("week"); // 'day', 'week', 'month'
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
@@ -60,17 +54,24 @@ const CalendarView = ({ onAddCalendar }) => {
 
   // Load connected calendars and selected calendars
   useEffect(() => {
-    if (user) {
+    if (user && supabaseClient) {
       loadCalendarData();
     }
-  }, [user]);
+  }, [user, supabaseClient]);
 
   // Load calendar events when date, view, or selected calendars change
   useEffect(() => {
-    if (user && selectedCalendarIds.length > 0) {
+    if (user && supabaseClient && selectedCalendarIds.length > 0) {
       loadCalendarEvents();
     }
-  }, [user, currentDate, view, selectedCalendarIds]);
+  }, [user, supabaseClient, currentDate, view, selectedCalendarIds]);
+
+  // Load availability slots when date or view changes
+  useEffect(() => {
+    if (user && supabaseClient) {
+      loadAvailabilitySlots();
+    }
+  }, [user, supabaseClient, currentDate, view]);
 
   // Load calendar data (connected calendars and selected calendars)
   const loadCalendarData = async () => {
@@ -80,6 +81,7 @@ const CalendarView = ({ onAddCalendar }) => {
       setIsLoading(true);
       setError(null);
 
+      // Load calendar integrations
       const { data: calendars, error: calendarsError } = await supabaseClient
         .from("calendar_integrations")
         .select("*");
@@ -87,6 +89,7 @@ const CalendarView = ({ onAddCalendar }) => {
       if (calendarsError) throw calendarsError;
       setConnectedCalendars(calendars || []);
 
+      // Load selected calendars
       const { data: selected, error: selectedError } = await supabaseClient
         .from("selected_calendars")
         .select("calendar_id");
@@ -126,6 +129,33 @@ const CalendarView = ({ onAddCalendar }) => {
     } catch (err) {
       console.error("Error loading calendar events:", err);
       setError("Failed to load calendar events. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load availability slots
+  const loadAvailabilitySlots = async () => {
+    if (!user?.id || !supabaseClient) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const { startDate, endDate } = getDateRange();
+
+      const { data: slots, error } = await supabaseClient
+        .from("availability_slots")
+        .select("*")
+        .gte("start_time", startDate.toISOString())
+        .lte("end_time", endDate.toISOString());
+
+      if (error) throw error;
+
+      setAvailabilitySlots(slots || []);
+    } catch (err) {
+      console.error("Error loading availability slots:", err);
+      setError("Failed to load availability slots. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -256,32 +286,96 @@ const CalendarView = ({ onAddCalendar }) => {
   };
 
   // Create a new availability slot
-  const createAvailabilitySlot = (date, hour) => {
+  const createAvailabilitySlot = async (date, hour) => {
+    if (!user?.id || !supabaseClient) return;
+
     const startTime = new Date(date);
     startTime.setHours(hour, 0, 0, 0);
 
     const endTime = new Date(startTime);
     endTime.setHours(hour + 1, 0, 0, 0);
 
-    const newSlot = {
-      id: Date.now().toString(),
-      startTime,
-      endTime,
-      available: true,
-    };
+    try {
+      const { data, error } = await supabaseClient
+        .from("availability_slots")
+        .insert({
+          user_id: user.id,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          available: true,
+        })
+        .select();
 
-    setAvailabilitySlots([...availabilitySlots, newSlot]);
+      if (error) throw error;
+
+      if (data) {
+        setAvailabilitySlots([...availabilitySlots, ...data]);
+      }
+    } catch (err) {
+      console.error("Error creating availability slot:", err);
+      setError("Failed to create availability slot. Please try again.");
+    }
+  };
+
+  // Toggle a slot's availability
+  const toggleSlotAvailability = async (slotId) => {
+    if (!user?.id || !supabaseClient) return;
+
+    // Find the slot to toggle
+    const slot = availabilitySlots.find((s) => s.id === slotId);
+    if (!slot) return;
+
+    try {
+      const { error } = await supabaseClient
+        .from("availability_slots")
+        .update({ available: !slot.available })
+        .eq("id", slotId);
+
+      if (error) throw error;
+
+      // Update local state
+      setAvailabilitySlots(
+        availabilitySlots.map((s) =>
+          s.id === slotId ? { ...s, available: !s.available } : s
+        )
+      );
+    } catch (err) {
+      console.error("Error toggling availability:", err);
+      setError("Failed to update availability. Please try again.");
+    }
+  };
+
+  // Delete an availability slot
+  const deleteAvailabilitySlot = async (slotId) => {
+    if (!supabaseClient) return;
+
+    try {
+      const { error } = await supabaseClient
+        .from("availability_slots")
+        .delete()
+        .eq("id", slotId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setAvailabilitySlots(
+        availabilitySlots.filter((slot) => slot.id !== slotId)
+      );
+    } catch (err) {
+      console.error("Error deleting availability slot:", err);
+      setError("Failed to delete availability slot.");
+    }
   };
 
   // Check if there's a slot at the specified date and hour
   const getSlotAtTime = (date, hour) => {
     return availabilitySlots.find((slot) => {
-      const slotDate = new Date(slot.startTime);
+      const slotStart = new Date(slot.start_time);
       return (
-        slotDate.getDate() === date.getDate() &&
-        slotDate.getMonth() === date.getMonth() &&
-        slotDate.getFullYear() === date.getFullYear() &&
-        slotDate.getHours() === hour
+        slotStart.getDate() === date.getDate() &&
+        slotStart.getMonth() === date.getMonth() &&
+        slotStart.getFullYear() === date.getFullYear() &&
+        slotStart.getHours() === hour
       );
     });
   };
@@ -289,25 +383,13 @@ const CalendarView = ({ onAddCalendar }) => {
   // Check if there's an event at the specified date and hour
   const getEventAtTime = (date, hour) => {
     return calendarEvents.find((event) => {
-      const eventStart = new Date(event.start);
-      const eventEnd = new Date(event.end);
+      const eventStart = new Date(event.start_time);
+      const eventEnd = new Date(event.end_time);
       const timeToCheck = new Date(date);
       timeToCheck.setHours(hour, 0, 0, 0);
 
       return timeToCheck >= eventStart && timeToCheck < eventEnd;
     });
-  };
-
-  // Toggle a slot's availability
-  const toggleSlotAvailability = (slotId) => {
-    setAvailabilitySlots(
-      availabilitySlots.map((slot) => {
-        if (slot.id === slotId) {
-          return { ...slot, available: !slot.available };
-        }
-        return slot;
-      })
-    );
   };
 
   // Render the calendar based on the current view
@@ -346,7 +428,7 @@ const CalendarView = ({ onAddCalendar }) => {
                       className="text-gray-500 hover:text-primary"
                       onClick={() => {
                         setView("day");
-                        setCurrentDate(date);
+                        setCurrentDate(new Date(date));
                       }}
                     >
                       <Plus size={16} />
@@ -358,7 +440,7 @@ const CalendarView = ({ onAddCalendar }) => {
                 <div className="mt-1 space-y-1">
                   {availabilitySlots
                     .filter((slot) => {
-                      const slotDate = new Date(slot.startTime);
+                      const slotDate = new Date(slot.start_time);
                       return (
                         slotDate.getDate() === date.getDate() &&
                         slotDate.getMonth() === date.getMonth() &&
@@ -370,6 +452,7 @@ const CalendarView = ({ onAddCalendar }) => {
                         key={slot.id}
                         slot={slot}
                         onToggle={() => toggleSlotAvailability(slot.id)}
+                        onDelete={() => deleteAvailabilitySlot(slot.id)}
                         compact={true}
                       />
                     ))}
@@ -419,8 +502,8 @@ const CalendarView = ({ onAddCalendar }) => {
                     (event
                       ? {
                           id: `event-${event.id}`,
-                          startTime: event.start,
-                          endTime: event.end,
+                          start_time: event.start_time,
+                          end_time: event.end_time,
                           available: false,
                           title: event.title,
                           isEvent: true,
@@ -446,6 +529,11 @@ const CalendarView = ({ onAddCalendar }) => {
                             displaySlot.isEvent
                               ? null
                               : () => toggleSlotAvailability(displaySlot.id)
+                          }
+                          onDelete={
+                            displaySlot.isEvent
+                              ? null
+                              : () => deleteAvailabilitySlot(displaySlot.id)
                           }
                         />
                       ) : isWorkingDay(date) ? (
@@ -546,13 +634,12 @@ const CalendarView = ({ onAddCalendar }) => {
                     className="flex items-center justify-between p-3 border rounded-md"
                   >
                     <div className="flex items-center">
-                      <div
-                        className={`w-3 h-3 rounded-full bg-${calendar.color} mr-3`}
-                      ></div>
-                      <span>{calendar.name}</span>
+                      <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
+                      <span>{calendar.provider}</span>
                     </div>
                     <div className="text-sm text-gray-500">
-                      {calendar.email || ""}
+                      Connected on{" "}
+                      {new Date(calendar.created_at).toLocaleDateString()}
                     </div>
                   </div>
                 ))}

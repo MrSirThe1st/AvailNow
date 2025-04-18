@@ -7,22 +7,21 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Basic client for unauthenticated operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+/**
+ * Create a Supabase client that uses Clerk session tokens
+ * @param {function} getToken - Function to get the Clerk session token
+ * @returns {Object} Supabase client
+ */
 export function createClerkSupabaseClient(getToken) {
   return createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       async headers() {
-        try {
-          // Get the Supabase-specific JWT token from Clerk
-          const token = await getToken({ template: "supabase" });
-          if (!token) return {};
+        const token = await getToken();
+        if (!token) return {};
 
-          return {
-            Authorization: `Bearer ${token}`,
-          };
-        } catch (error) {
-          console.error("Error getting Supabase auth token:", error);
-          return {};
-        }
+        return {
+          Authorization: `Bearer ${token}`,
+        };
       },
     },
     auth: {
