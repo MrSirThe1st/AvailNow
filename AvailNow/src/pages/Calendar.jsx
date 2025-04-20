@@ -1,14 +1,17 @@
 // src/pages/Calendar.jsx
 import React, { useState, useEffect } from "react";
 import { Loader } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
 import { useOutletContext } from "react-router-dom";
+import { handleCalendarCallback } from "../lib/calendarService";
 
 const Calendar = () => {
   // Get the user and Supabase client from the layout context
   const { user, supabaseClient } = useOutletContext();
+  const location = useLocation();
 
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
@@ -21,6 +24,70 @@ const Calendar = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [callbackProcessing, setCallbackProcessing] = useState(false);
+  const [callbackError, setCallbackError] = useState(null);
+
+  // Process OAuth callback if present in URL
+  useEffect(() => {
+    // Get URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    const provider = localStorage.getItem("calendarAuthProvider");
+
+    // Process callback if parameters exist and we have a user
+    if (code && state && provider && user?.id && !callbackProcessing) {
+      const processOAuthCallback = async () => {
+        try {
+          console.log("Processing OAuth callback on Calendar page:", {
+            code: code ? "PRESENT" : "NULL",
+            state,
+            provider,
+          });
+
+          setCallbackProcessing(true);
+
+          // Process the callback
+          const result = await handleCalendarCallback(
+            provider,
+            { code, state },
+            user.id
+          );
+
+          console.log("Calendar connection successful:", result);
+
+          // Add the newly connected calendars to the state
+          if (result.calendars) {
+            const newCalendars = result.calendars.map((cal) => ({
+              ...cal,
+              provider: provider,
+            }));
+            setConnectedCalendars((prev) => [...prev, ...newCalendars]);
+          }
+
+          // Clean up
+          localStorage.removeItem("calendarAuthProvider");
+
+          // Clear URL parameters without reloading
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+          );
+        } catch (err) {
+          console.error("Error processing OAuth callback:", err);
+          setCallbackError(
+            "Failed to connect calendar: " + (err.message || "Unknown error")
+          );
+        } finally {
+          setCallbackProcessing(false);
+        }
+      };
+
+      processOAuthCallback();
+    }
+  }, [user, location]);
+
   // Add this new useEffect hook after your existing hooks
   useEffect(() => {
     if (supabaseClient) {
@@ -190,6 +257,28 @@ const Calendar = () => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Calendar</h1>
 
+      {/* OAuth Callback Status */}
+      {callbackProcessing && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-center">
+            <Loader size={24} className="animate-spin mr-3 text-blue-500" />
+            <p>Processing calendar connection...</p>
+          </div>
+        </div>
+      )}
+
+      {callbackError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-700">{callbackError}</p>
+          <button
+            className="mt-2 text-sm text-blue-600 underline"
+            onClick={() => setCallbackError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Calendar Widget */}
         <CalendarView
@@ -284,6 +373,20 @@ const Calendar = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-600">
+        <strong>Debug Info:</strong>
+        <br />
+        URL Parameters: {window.location.search || "NONE"}
+        <br />
+        Provider in localStorage:{" "}
+        {localStorage.getItem("calendarAuthProvider") || "NONE"}
+        <br />
+        Connected Calendars: {connectedCalendars.length}
+        <br />
+        User ID: {user?.id || "Not loaded"}
       </div>
 
       {/* Calendar Integration Modal */}

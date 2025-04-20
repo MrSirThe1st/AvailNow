@@ -20,6 +20,7 @@ import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 // import WidgetPreview from "./pages/widgetPreview";
 import WidgetTest from "./pages/WidgetTest";
+import OAuthCallback from "./pages/Auth/OAuthCallback";
 
 function App() {
   const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -102,6 +103,15 @@ function App() {
     {
       path: "/forgot-password",
       element: <ForgotPassword />,
+    },
+    {
+      // Add a dedicated route for OAuth callbacks
+      path: "/auth/callback",
+      element: (
+        <ProtectedRoute>
+          <OAuthCallback />
+        </ProtectedRoute>
+      ),
     },
   ]);
 

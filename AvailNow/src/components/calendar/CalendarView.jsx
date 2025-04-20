@@ -52,6 +52,54 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
   // Hours to display in the calendar
   const displayHours = Array.from({ length: 12 }, (_, i) => i + 8); // 8am to 7pm
 
+  // Update loadConnectedCalendars in CalendarView.jsx
+
+  const loadConnectedCalendars = async () => {
+    if (!supabaseClient) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      console.log("Loading connected calendars for user", user?.id);
+
+      // First try RPC approach
+      try {
+        const { data: calendars, error: rpcError } = await supabaseClient.rpc(
+          "get_user_calendars",
+          { p_user_id: user.id }
+        );
+
+        if (!rpcError) {
+          console.log("Loaded calendars via RPC:", calendars);
+          setConnectedCalendars(calendars || []);
+          return;
+        }
+      } catch (rpcErr) {
+        console.warn("RPC approach failed, trying direct query:", rpcErr);
+      }
+
+      // Fall back to direct query
+      const { data, error } = await supabaseClient
+        .from("calendar_integrations")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error in direct query:", error);
+        throw error;
+      }
+
+      console.log("Loaded calendars via direct query:", data);
+      setConnectedCalendars(data || []);
+    } catch (err) {
+      console.error("Error loading connected calendars:", err);
+      setError("Failed to load calendar integrations. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load connected calendars and selected calendars
   useEffect(() => {
     if (user && supabaseClient) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Calendar, User, Loader, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth, useClerk } from "@clerk/clerk-react";
 import {
   CALENDAR_PROVIDERS,
   initiateCalendarAuth,
@@ -11,6 +12,7 @@ import {
 const CalendarIntegration = ({ onClose, onSuccess }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { userId } = useAuth();
   const [userData, setUserData] = useState(null);
 
   const [step, setStep] = useState("select");
@@ -47,41 +49,46 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     },
   ];
 
-  // Retrieve user from clerk on mount
+  // Set user data when userId is available
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        // Directly import clerk to get the user
-        const { getAuth } = await import("@clerk/clerk-react");
-        const auth = getAuth();
+    if (userId) {
+      setUserData({ id: userId });
+      console.log("User authenticated:", userId);
+    } else {
+      console.error("No authenticated user found");
+    }
+  }, [userId]);
 
-        if (auth && auth.userId) {
-          setUserData({
-            id: auth.userId,
-          });
-          console.log("User authenticated:", auth.userId);
-        } else {
-          console.error("No authenticated user found");
-        }
-      } catch (err) {
-        console.error("Error loading user data:", err);
-      }
-    };
-
-    loadUserData();
-  }, []);
-
-  // Check for OAuth callback parameters
+  // Check for OAuth callback using both location and window.location
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const code = searchParams.get("code");
-    const state = searchParams.get("state");
+    // First, log the full URL for debugging
+    console.log("Full current URL:", window.location.href);
+
+    // Use window.location.search directly instead of React Router's location
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCode = urlParams.get("code");
+    const urlState = urlParams.get("state");
+
+    // Also check React Router's location as backup
+    const routerParams = new URLSearchParams(location.search);
+    const routerCode = routerParams.get("code");
+    const routerState = routerParams.get("state");
+
+    // Use whichever source has the code
+    const code = urlCode || routerCode;
+    const state = urlState || routerState;
+
     const provider = localStorage.getItem("calendarAuthProvider");
 
-    console.log("Checking OAuth callback params:", { code, state, provider });
+    console.log("Checking OAuth callback params from URL:", {
+      urlCode: urlCode ? "PRESENT" : "NULL",
+      urlState: urlState ? "PRESENT" : "NULL",
+      routerCode: routerCode ? "PRESENT" : "NULL",
+      routerState: routerState ? "PRESENT" : "NULL",
+      provider,
+    });
 
     if (code && state && provider) {
-      // Make sure we have a user before processing
       if (userData && userData.id) {
         console.log("Processing OAuth callback with user:", userData.id);
         processOAuthCallback(provider, { code, state });
@@ -90,9 +97,11 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       }
     }
 
-    // Clean up URL
-    if (code || state) {
+    // Only clean up URL if we have parameters to clean
+    if (urlCode || urlState || routerCode || routerState) {
       console.log("Cleaning up URL params");
+      // Store the fact that we're in a callback so we don't lose context
+      sessionStorage.setItem("oauth_callback_processing", "true");
       navigate(location.pathname, { replace: true });
     }
   }, [location, navigate, userData]);
@@ -131,6 +140,8 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
 
       setStep("configure");
       localStorage.removeItem("calendarAuthProvider");
+      // Clean up the callback processing flag
+      sessionStorage.removeItem("oauth_callback_processing");
     } catch (err) {
       console.error("Error processing OAuth callback:", err);
       setError(`Failed to connect to calendar service: ${err.message}`);
@@ -407,19 +418,22 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       </div>
 
       {/* Debug info */}
-      {error && (
-        <div className="mb-4 p-2 border border-red-300 bg-red-50 rounded text-xs">
-          <strong>Debug Info:</strong>
-          <br />
-          Error: {error}
-          <br />
-          User ID: {userData?.id || "Not loaded"}
-          <br />
-          Provider: {selectedProvider?.id || "None selected"}
-          <br />
-          Step: {step}
-        </div>
-      )}
+      <div className="mb-4 p-2 border border-blue-300 bg-blue-50 rounded text-xs">
+        <strong>Debug Info:</strong>
+        <br />
+        User ID: {userData?.id || "Not loaded"}
+        <br />
+        URL Search Params: {window.location.search || "NONE"}
+        <br />
+        Provider:{" "}
+        {selectedProvider?.id ||
+          localStorage.getItem("calendarAuthProvider") ||
+          "None selected"}
+        <br />
+        Step: {step}
+        <br />
+        Error: {error || "None"}
+      </div>
 
       {step === "select" && renderSelectStep()}
       {step === "authorize" && renderAuthorizeStep()}
