@@ -186,96 +186,112 @@ const storeGoogleTokens = async (userId, tokenData) => {
       throw new Error("Supabase client not available");
     }
 
-    // Temporarily disable RLS for testing
-    // This is NOT recommended for production, but helps with debugging
-    console.log("Attempting to disable RLS for this operation (for testing)");
+    console.log("Using store_calendar_tokens RPC function");
 
+    // Use the RPC function that bypasses RLS
+    const { data, error } = await supabase.rpc("store_calendar_tokens", {
+      p_user_id: userId,
+      p_provider: "google",
+      p_access_token: access_token,
+      p_refresh_token: refresh_token || null,
+      p_expires_at: expiresAt.toISOString(),
+    });
+
+    if (error) {
+      // Log the error but don't throw it yet - we might be able to handle it
+      console.error("RPC error:", error);
+
+      // Handle the case where the RPC function doesn't exist
+      if (error.code === "42883") {
+        // undefined_function
+        console.log("RPC function doesn't exist, falling back to direct query");
+        return await fallbackDirectUpdate();
+      }
+
+      // Handle conflict errors
+      if (error.code === "23505") {
+        // unique_violation
+        console.log("Duplicate key, updating existing record");
+        return await fallbackDirectUpdate();
+      }
+
+      // For other errors, throw
+      throw error;
+    }
+
+    console.log("Successfully stored tokens via RPC:", data);
+    return data;
+  } catch (error) {
+    // Handle RLS errors and other Supabase errors
+    if (error.code === "42501") {
+      // RLS policy violation
+      console.error("RLS policy violation, attempting fallback approach");
+      try {
+        return await fallbackDirectUpdate();
+      } catch (fallbackError) {
+        console.error("Fallback also failed:", fallbackError);
+        throw fallbackError;
+      }
+    }
+
+    console.error("Error in storeGoogleTokens:", error);
+    throw error;
+  }
+
+  // Fallback function for direct database access
+  async function fallbackDirectUpdate() {
+    const { supabase } = await import("../supabase");
+
+    // Build the record
     const record = {
-      user_id: userId,
-      provider: "google",
       access_token,
       refresh_token: refresh_token || null,
       expires_at: expiresAt.toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    console.log("Record to insert:", {
-      ...record,
-      access_token: "REDACTED",
-      refresh_token: refresh_token ? "REDACTED" : null,
-    });
+    // Check if the record exists first
+    const { data: existingData } = await supabase
+      .from("calendar_integrations")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("provider", "google")
+      .maybeSingle();
 
-    // First try to select the record to see if it exists
-    console.log("Checking if calendar integration already exists");
+    let result;
 
-    try {
-      // Try using a direct SQL query instead of the builder
-      const { data, error } = await supabase.rpc("store_calendar_tokens", {
-        p_user_id: userId,
-        p_provider: "google",
-        p_access_token: access_token,
-        p_refresh_token: refresh_token || null,
-        p_expires_at: expiresAt.toISOString(),
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      console.log("Successfully stored tokens via RPC:", data);
-      return data;
-    } catch (error) {
-      // Fallback - try direct query
-      console.error("RPC method failed, trying direct query:", error);
-
-      // Check if row exists
-      const { data: existingData, error: selectError } = await supabase
+    if (existingData) {
+      // Update existing record
+      console.log("Found existing record, updating:", existingData.id);
+      const { data, error } = await supabase
         .from("calendar_integrations")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("provider", "google")
-        .limit(1);
+        .update(record)
+        .eq("id", existingData.id)
+        .select();
 
-      console.log("Existing data check:", { existingData, selectError });
+      if (error) throw error;
+      result = data;
+    } else {
+      // Insert new record
+      console.log("No existing record, inserting new one");
+      const newRecord = {
+        ...record,
+        user_id: userId,
+        provider: "google",
+        created_at: new Date().toISOString(),
+      };
 
-      let result;
-      if (existingData && existingData.length > 0) {
-        // Update existing record
-        console.log("Updating existing record");
-        const { data, error } = await supabase
-          .from("calendar_integrations")
-          .update(record)
-          .eq("id", existingData[0].id)
-          .select();
+      const { data, error } = await supabase
+        .from("calendar_integrations")
+        .insert(newRecord)
+        .select();
 
-        if (error) {
-          console.error("Error updating record:", error);
-          throw error;
-        }
-
-        result = data;
-      } else {
-        // Insert new record
-        console.log("Inserting new record");
-        const { data, error } = await supabase
-          .from("calendar_integrations")
-          .insert(record)
-          .select();
-
-        if (error) {
-          console.error("Error inserting record:", error);
-          throw error;
-        }
-
-        result = data;
-      }
-
-      console.log("Successfully stored tokens, response:", result);
-      return result;
+      if (error) throw error;
+      result = data;
     }
-  } catch (error) {
-    console.error("Error in storeGoogleTokens:", error);
-    throw error;
+
+    console.log("Fallback successful:", result);
+    return result;
   }
 };
 /**
