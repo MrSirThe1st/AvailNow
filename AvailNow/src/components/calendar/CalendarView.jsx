@@ -129,18 +129,20 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
       setIsLoading(true);
       setError(null);
 
-      // Load calendar integrations
+      // Load calendar integrations for the current user only
       const { data: calendars, error: calendarsError } = await supabaseClient
         .from("calendar_integrations")
-        .select("*");
+        .select("*")
+        .eq("user_id", user.id); // <-- Filter by user
 
       if (calendarsError) throw calendarsError;
       setConnectedCalendars(calendars || []);
 
-      // Load selected calendars
+      // Load selected calendars for the current user only
       const { data: selected, error: selectedError } = await supabaseClient
         .from("selected_calendars")
-        .select("calendar_id");
+        .select("calendar_id")
+        .eq("user_id", user.id); // <-- Filter by user
 
       if (selectedError) throw selectedError;
       setSelectedCalendarIds(selected?.map((s) => s.calendar_id) || []);
@@ -154,8 +156,7 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
 
   // Load calendar events for the current date range
   const loadCalendarEvents = async () => {
-    if (!user?.id || !supabaseClient || selectedCalendarIds.length === 0)
-      return;
+    if (!user?.id || !supabaseClient) return;
 
     try {
       setIsLoading(true);
@@ -163,17 +164,90 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
 
       const { startDate, endDate } = getDateRange();
 
+      console.log("Fetching calendar events for date range:", {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      });
+
+      // First, get connected calendar integrations
+      const { data: integrations, error: integrationsError } =
+        await supabaseClient.from("calendar_integrations").select("*");
+
+      if (integrationsError) throw integrationsError;
+
+      if (!integrations || integrations.length === 0) {
+        console.log("No calendar integrations found");
+        setCalendarEvents([]);
+        return;
+      }
+
+      console.log("Found calendar integrations:", integrations.length);
+
+      // For Google Calendar, we fetch events directly from the API
+      const googleIntegration = integrations.find(
+        (int) => int.provider === "google"
+      );
+
+      if (googleIntegration && googleIntegration.access_token) {
+        console.log("Found Google integration, fetching events");
+
+        // Implement a simpler direct Google Calendar API call for now
+        try {
+          const response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${startDate.toISOString()}&timeMax=${endDate.toISOString()}&singleEvents=true`,
+            {
+              headers: {
+                Authorization: `Bearer ${googleIntegration.access_token}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            console.error("Google API response error:", response.status);
+            throw new Error(`Google API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          console.log("Google events fetched:", data.items?.length || 0);
+
+          if (data.items && data.items.length > 0) {
+            // Transform to our standard format
+            const googleEvents = data.items.map((event) => ({
+              id: event.id,
+              title: event.summary || "Busy",
+              description: event.description,
+              start_time: event.start.dateTime || event.start.date,
+              end_time: event.end.dateTime || event.end.date,
+              all_day: !event.start.dateTime,
+              location: event.location,
+              calendar_id: "primary", // Default calendar
+              provider: "google",
+              color: "#4285F4", // Google blue
+            }));
+
+            setCalendarEvents(googleEvents);
+            updateAvailabilityWithEvents(googleEvents);
+            return;
+          }
+        } catch (googleErr) {
+          console.error("Google Calendar API error:", googleErr);
+          // Continue to fallback method
+        }
+      }
+
+      // Fallback to database events
+      console.log("Falling back to database events");
       const { data: events, error } = await supabaseClient
         .from("calendar_events")
         .select("*")
         .gte("start_time", startDate.toISOString())
-        .lte("end_time", endDate.toISOString())
-        .in("calendar_id", selectedCalendarIds);
+        .lte("end_time", endDate.toISOString());
 
       if (error) throw error;
 
+      console.log("Database events loaded:", events?.length || 0);
       setCalendarEvents(events || []);
-      updateAvailabilityWithEvents(events);
+      updateAvailabilityWithEvents(events || []);
     } catch (err) {
       console.error("Error loading calendar events:", err);
       setError("Failed to load calendar events. Please try again.");
@@ -679,11 +753,25 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
                 {connectedCalendars.map((calendar) => (
                   <div
                     key={calendar.id}
-                    className="flex items-center justify-between p-3 border rounded-md"
+                    className="flex items-center justify-between p-3 border rounded-md hover:border-primary hover:bg-blue-50 transition-colors"
                   >
                     <div className="flex items-center">
                       <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
-                      <span>{calendar.provider}</span>
+                      <div>
+                        <span className="font-medium capitalize">
+                          {calendar.provider}
+                        </span>
+                        <div className="text-xs text-gray-500">
+                          {calendar.access_token
+                            ? "Active connection"
+                            : "Connection needs renewal"}
+                          {calendar.provider === "google" && (
+                            <span className="ml-2 text-green-600 font-semibold">
+                              (Google Calendar)
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="text-sm text-gray-500">
                       Connected on{" "}
@@ -691,6 +779,14 @@ const CalendarView = ({ onAddCalendar, supabaseClient, user }) => {
                     </div>
                   </div>
                 ))}
+                <div className="mt-2 text-center">
+                  <button
+                    className="text-primary hover:underline text-sm"
+                    onClick={onAddCalendar}
+                  >
+                    + Add another calendar
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="border rounded-md p-4 text-center">
