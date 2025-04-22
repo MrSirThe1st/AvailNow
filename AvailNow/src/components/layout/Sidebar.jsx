@@ -25,9 +25,7 @@ const Sidebar = () => {
     navigate("/login");
   };
 
-  const handleTest = async () => {
-    navigate("/widget-test");
-  };
+
 
 
   return (
@@ -61,16 +59,7 @@ const Sidebar = () => {
             <span>Sign Out</span>
           </button>
         </div>
-        <div className="pt-6 mt-auto">
-          <button
-            onClick={handleTest}
-            className="flex items-center px-4 py-3 rounded-md w-full text-left text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <span className="mr-3">
-            </span>
-            <span>test</span>
-          </button>
-        </div>
+       
       </nav>
     </div>
   );

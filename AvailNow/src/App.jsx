@@ -19,7 +19,7 @@ import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 // import WidgetPreview from "./pages/widgetPreview";
-import WidgetTest from "./pages/WidgetTest";
+
 import OAuthCallback from "./pages/Auth/OAuthCallback";
 
 function App() {
@@ -57,10 +57,6 @@ function App() {
               <Calendar />
             </ProtectedRoute>
           ),
-        },
-        {
-          path: "/widget-test",
-          element: <WidgetTest />,
         },
         {
           path: "widget",
