@@ -92,8 +92,10 @@ export const getConnectedCalendars = async (userId) => {
   // Get all calendar integrations
   const { data: integrations, error } = await supabase
     .from("calendar_integrations")
-    .select("provider")
-    .eq("user_id", userId);
+  .select("*")
+  .eq("user_id", userId)
+  .eq("provider", provider)
+  .limit(1);
 
   if (error) {
     console.error("Failed to fetch calendar integrations:", error);
@@ -180,29 +182,45 @@ export const fetchCalendarEvents = async (
   startDate,
   endDate
 ) => {
-  switch (provider) {
-    case CALENDAR_PROVIDERS.GOOGLE:
-      return googleCalendar.fetchGoogleEvents(
-        userId,
-        calendarId,
-        startDate,
-        endDate
-      );
+  try {
+    // First get the integration details
+    const { data: integration, error: integrationError } = await supabase
+      .from("calendar_integrations")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("provider", provider)
+      .single();
 
-    case CALENDAR_PROVIDERS.OUTLOOK:
-      // return outlookCalendar.fetchOutlookEvents(userId, calendarId, startDate, endDate);
-      throw new Error("Outlook Calendar integration not yet implemented");
+    if (integrationError || !integration) {
+      console.error("Failed to fetch calendar integration:", integrationError);
+      throw new Error("Calendar integration not found");
+    }
 
-    case CALENDAR_PROVIDERS.APPLE:
-      // return appleCalendar.fetchAppleEvents(userId, calendarId, startDate, endDate);
-      throw new Error("Apple Calendar integration not yet implemented");
+    // Now fetch events based on the provider
+    switch (provider) {
+      case CALENDAR_PROVIDERS.GOOGLE:
+        return await googleCalendar.fetchGoogleEvents(
+          integration.access_token,
+          calendarId,
+          startDate,
+          endDate
+        );
 
-    case CALENDAR_PROVIDERS.CALENDLY:
-      // return calendlyCalendar.fetchCalendlyEvents(userId, calendarId, startDate, endDate);
-      throw new Error("Calendly integration not yet implemented");
+      case CALENDAR_PROVIDERS.OUTLOOK:
+        throw new Error("Outlook Calendar integration not yet implemented");
 
-    default:
-      throw new Error(`Unsupported calendar provider: ${provider}`);
+      case CALENDAR_PROVIDERS.APPLE:
+        throw new Error("Apple Calendar integration not yet implemented");
+
+      case CALENDAR_PROVIDERS.CALENDLY:
+        throw new Error("Calendly integration not yet implemented");
+
+      default:
+        throw new Error(`Unsupported calendar provider: ${provider}`);
+    }
+  } catch (error) {
+    console.error("Error fetching calendar events:", error);
+    throw error;
   }
 };
 

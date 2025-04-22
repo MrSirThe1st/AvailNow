@@ -367,88 +367,46 @@ export const fetchGoogleCalendars = async (accessToken) => {
  * @returns {Promise<Array>} List of calendar events
  */
 export const fetchGoogleEvents = async (
-  userId,
+  accessToken,
   calendarId,
   startDate,
   endDate
 ) => {
-  console.log("Fetching Google events:", { userId, calendarId });
-
   try {
-    // Get the user's access token
-    const { supabase } = await import("../supabase");
-
-    const { data: integration, error } = await supabase
-      .from("calendar_integrations")
-      .select("access_token, refresh_token, expires_at")
-      .eq("user_id", userId)
-      .eq("provider", "google")
-      .single();
-
-    if (error) {
-      console.error("Error fetching integration:", error);
-      throw error;
-    }
-
-    if (!integration) {
-      console.error("Google Calendar integration not found for user:", userId);
-      throw new Error("Google Calendar integration not found");
-    }
-
-    // Check if token is expired and refresh if needed
-    const now = new Date();
-    const expiresAt = new Date(integration.expires_at);
-
-    let accessToken = integration.access_token;
-
-    if (now >= expiresAt) {
-      console.log("Token expired, refreshing...");
-      // Token is expired, refresh it
-      const newTokens = await refreshGoogleToken(integration.refresh_token);
-      accessToken = newTokens.access_token;
-    }
-
-    // Format dates for Google API
-    const timeMin = startDate.toISOString();
-    const timeMax = endDate.toISOString();
-
-    console.log("Fetching events with time range:", { timeMin, timeMax });
-
-    // Fetch events from Google Calendar
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?` +
+        new URLSearchParams({
+          timeMin: startDate.toISOString(),
+          timeMax: endDate.toISOString(),
+          singleEvents: true,
+          orderBy: "startTime",
+        }),
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Error fetching events:", errorData);
-      throw new Error(
-        `Failed to fetch events: ${errorData.error?.message || "Unknown error"}`
-      );
+      throw new Error(`Google Calendar API error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log("Events fetched:", data.items?.length || 0);
 
-    // Transform to standard format
-    return (data.items || []).map((event) => ({
+    // Transform Google Calendar events to our format
+    return data.items.map((event) => ({
       id: event.id,
-      title: event.summary || "Busy",
-      description: event.description,
-      start: new Date(event.start.dateTime || event.start.date),
-      end: new Date(event.end.dateTime || event.end.date),
-      allDay: !event.start.dateTime,
-      location: event.location,
-      calendarId: calendarId,
+      title: event.summary,
+      start_time: event.start.dateTime || event.start.date,
+      end_time: event.end.dateTime || event.end.date,
+      all_day: !event.start.dateTime,
+      calendar_id: calendarId,
       provider: "google",
     }));
   } catch (error) {
-    console.error("Error in fetchGoogleEvents:", error);
+    console.error("Error fetching Google Calendar events:", error);
     throw error;
   }
 };
