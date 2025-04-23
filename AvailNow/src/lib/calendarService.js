@@ -92,10 +92,8 @@ export const getConnectedCalendars = async (userId) => {
   // Get all calendar integrations
   const { data: integrations, error } = await supabase
     .from("calendar_integrations")
-  .select("*")
-  .eq("user_id", userId)
-  .eq("provider", provider)
-  .limit(1);
+    .select("*")
+    .eq("user_id", userId);
 
   if (error) {
     console.error("Failed to fetch calendar integrations:", error);
@@ -183,17 +181,17 @@ export const fetchCalendarEvents = async (
   endDate
 ) => {
   try {
-    // First get the integration details
+    // First get the integration details - using eq for both user_id and provider
     const { data: integration, error: integrationError } = await supabase
       .from("calendar_integrations")
       .select("*")
       .eq("user_id", userId)
       .eq("provider", provider)
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single to avoid error when no row found
 
     if (integrationError || !integration) {
       console.error("Failed to fetch calendar integration:", integrationError);
-      throw new Error("Calendar integration not found");
+      return []; // Return empty array instead of throwing error for better UX
     }
 
     // Now fetch events based on the provider

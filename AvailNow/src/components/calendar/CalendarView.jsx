@@ -93,8 +93,8 @@ const CalendarView = ({
           try {
             return await fetchCalendarEvents(
               user.id,
-              calendar.provider,
-              calendar.id,
+              calendar.provider || "google", // Default to google if no provider specified
+              calendar.calendar_id || calendar.id, // Handle both id formats
               startDate,
               endDate
             );
