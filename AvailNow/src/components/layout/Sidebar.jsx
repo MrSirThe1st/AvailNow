@@ -6,11 +6,11 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import { useClerk } from "@clerk/clerk-react";
+import { useAuth } from "../../context/SupabaseAuthContext";
 
 const Sidebar = () => {
   const location = useLocation();
-  const { signOut } = useClerk();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
 
   const navItems = [
@@ -24,9 +24,6 @@ const Sidebar = () => {
     await signOut();
     navigate("/login");
   };
-
-
-
 
   return (
     <div className="h-full w-64 border-r border-gray-200 p-4">
@@ -59,7 +56,6 @@ const Sidebar = () => {
             <span>Sign Out</span>
           </button>
         </div>
-       
       </nav>
     </div>
   );

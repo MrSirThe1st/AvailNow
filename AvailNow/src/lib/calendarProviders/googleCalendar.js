@@ -1,4 +1,5 @@
 // src/lib/calendarProviders/googleCalendar.js
+import { supabase } from "../supabase";
 
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -6,7 +7,7 @@ const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 // Update the redirect URI to use the dedicated callback route
 const REDIRECT_URI =
   import.meta.env.VITE_GOOGLE_REDIRECT_URI ||
-  `${window.location.origin}/calendar`;
+  `${window.location.origin}/auth/callback`;
 
 /**
  * Initiate Google OAuth flow for calendar access
@@ -44,7 +45,7 @@ export const handleGoogleCallback = async (code, state, userId) => {
   });
 
   // Verify state parameter
-   const savedState = localStorage.getItem("google_auth_state");
+  const savedState = localStorage.getItem("google_auth_state");
   console.log("State comparison:", {
     savedState: savedState || "NULL",
     receivedState: state || "NULL",
@@ -179,121 +180,55 @@ const storeGoogleTokens = async (userId, tokenData) => {
   });
 
   try {
-    // Import supabase at runtime to avoid circular dependencies
-    const { supabase } = await import("../supabase");
-
-    if (!supabase) {
-      throw new Error("Supabase client not available");
-    }
-
-    console.log("Using store_calendar_tokens RPC function");
-
-    // Use the RPC function that bypasses RLS
-    const { data, error } = await supabase.rpc("store_calendar_tokens", {
-      p_user_id: userId,
-      p_provider: "google",
-      p_access_token: access_token,
-      p_refresh_token: refresh_token || null,
-      p_expires_at: expiresAt.toISOString(),
-    });
-
-    if (error) {
-      // Log the error but don't throw it yet - we might be able to handle it
-      console.error("RPC error:", error);
-
-      // Handle the case where the RPC function doesn't exist
-      if (error.code === "42883") {
-        // undefined_function
-        console.log("RPC function doesn't exist, falling back to direct query");
-        return await fallbackDirectUpdate();
-      }
-
-      // Handle conflict errors
-      if (error.code === "23505") {
-        // unique_violation
-        console.log("Duplicate key, updating existing record");
-        return await fallbackDirectUpdate();
-      }
-
-      // For other errors, throw
-      throw error;
-    }
-
-    console.log("Successfully stored tokens via RPC:", data);
-    return data;
-  } catch (error) {
-    // Handle RLS errors and other Supabase errors
-    if (error.code === "42501") {
-      // RLS policy violation
-      console.error("RLS policy violation, attempting fallback approach");
-      try {
-        return await fallbackDirectUpdate();
-      } catch (fallbackError) {
-        console.error("Fallback also failed:", fallbackError);
-        throw fallbackError;
-      }
-    }
-
-    console.error("Error in storeGoogleTokens:", error);
-    throw error;
-  }
-
-  // Fallback function for direct database access
-  async function fallbackDirectUpdate() {
-    const { supabase } = await import("../supabase");
-
-    // Build the record
-    const record = {
-      access_token,
-      refresh_token: refresh_token || null,
-      expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    // Check if the record exists first
-    const { data: existingData } = await supabase
+    // Check if integration already exists
+    const { data: existingIntegration } = await supabase
       .from("calendar_integrations")
       .select("id")
       .eq("user_id", userId)
       .eq("provider", "google")
       .maybeSingle();
 
-    let result;
-
-    if (existingData) {
+    if (existingIntegration) {
       // Update existing record
-      console.log("Found existing record, updating:", existingData.id);
+      console.log("Updating existing integration:", existingIntegration.id);
       const { data, error } = await supabase
         .from("calendar_integrations")
-        .update(record)
-        .eq("id", existingData.id)
+        .update({
+          access_token,
+          refresh_token: refresh_token || null,
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingIntegration.id)
         .select();
 
       if (error) throw error;
-      result = data;
+      return data;
     } else {
-      // Insert new record
-      console.log("No existing record, inserting new one");
-      const newRecord = {
-        ...record,
-        user_id: userId,
-        provider: "google",
-        created_at: new Date().toISOString(),
-      };
-
+      // Insert new integration
+      console.log("Creating new integration for user:", userId);
       const { data, error } = await supabase
         .from("calendar_integrations")
-        .insert(newRecord)
+        .insert({
+          user_id: userId,
+          provider: "google",
+          access_token,
+          refresh_token: refresh_token || null,
+          expires_at: expiresAt.toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .select();
 
       if (error) throw error;
-      result = data;
+      return data;
     }
-
-    console.log("Fallback successful:", result);
-    return result;
+  } catch (error) {
+    console.error("Error storing Google tokens:", error);
+    throw error;
   }
 };
+
 /**
  * Fetch user's Google Calendars
  * @param {string} accessToken - Google OAuth access token
@@ -360,7 +295,7 @@ export const fetchGoogleCalendars = async (accessToken) => {
 
 /**
  * Fetch events from a Google Calendar
- * @param {string} userId - User ID
+ * @param {string} accessToken - Access token
  * @param {string} calendarId - Calendar ID
  * @param {Date} startDate - Start date to fetch events from
  * @param {Date} endDate - End date to fetch events to
@@ -374,7 +309,7 @@ export const fetchGoogleEvents = async (
 ) => {
   try {
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?` +
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?` +
         new URLSearchParams({
           timeMin: startDate.toISOString(),
           timeMax: endDate.toISOString(),
@@ -416,7 +351,7 @@ export const fetchGoogleEvents = async (
  * @param {string} refreshToken - Google OAuth refresh token
  * @returns {Promise<Object>} New token data
  */
-const refreshGoogleToken = async (refreshToken) => {
+export const refreshGoogleToken = async (refreshToken) => {
   if (!refreshToken) {
     throw new Error("No refresh token provided");
   }
@@ -454,8 +389,6 @@ const refreshGoogleToken = async (refreshToken) => {
     expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
 
     // Update token in database
-    const { supabase } = await import("../supabase");
-
     const { data, error } = await supabase
       .from("calendar_integrations")
       .update({
@@ -488,7 +421,6 @@ const refreshGoogleToken = async (refreshToken) => {
 export const disconnectGoogleCalendar = async (userId) => {
   try {
     console.log("Disconnecting Google Calendar for user:", userId);
-    const { supabase } = await import("../supabase");
 
     // Get the integration to revoke access token
     const { data: integration, error } = await supabase
@@ -498,8 +430,7 @@ export const disconnectGoogleCalendar = async (userId) => {
       .eq("provider", "google")
       .single();
 
-    if (error && error.code !== "PGRST116") {
-      // Not found
+    if (error) {
       console.error("Error finding integration to disconnect:", error);
       throw error;
     }
@@ -529,6 +460,18 @@ export const disconnectGoogleCalendar = async (userId) => {
     if (deleteError) {
       console.error("Error deleting integration:", deleteError);
       throw deleteError;
+    }
+
+    // Also delete any selected calendars
+    const { error: deleteCalendarError } = await supabase
+      .from("selected_calendars")
+      .delete()
+      .eq("user_id", userId)
+      .eq("provider", "google");
+
+    if (deleteCalendarError) {
+      console.error("Error deleting selected calendars:", deleteCalendarError);
+      // Don't throw here, as the main integration was deleted successfully
     }
 
     console.log("Google Calendar disconnected successfully");

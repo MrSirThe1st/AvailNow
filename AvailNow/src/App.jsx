@@ -1,13 +1,9 @@
-import {
-  ClerkProvider,
-  SignedIn,
-  SignedOut,
-  RedirectToSignIn,
-} from "@clerk/clerk-react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { SupabaseAuthProvider } from "./context/SupabaseAuthContext";
 
 // Layouts
 import Layout from "./components/layout/Layout";
+import ProtectedRoute from "./pages/Auth/ProtectedRoute";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
@@ -18,74 +14,40 @@ import Account from "./pages/Account";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
-// import WidgetPreview from "./pages/widgetPreview";
-
+import ResetPassword from "./pages/Auth/ResetPassword";
 import OAuthCallback from "./pages/Auth/OAuthCallback";
 
 function App() {
-  const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-  // Protected route component using Clerk
-  const ProtectedRoute = ({ children }) => {
-    return (
-      <>
-        <SignedIn>{children}</SignedIn>
-        <SignedOut>
-          <RedirectToSignIn />
-        </SignedOut>
-      </>
-    );
-  };
-
   const router = createBrowserRouter([
     {
       path: "/",
-      element: <Layout />,
+      element: <ProtectedRoute />,
       children: [
         {
-          index: true,
-          element: (
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          ),
+          element: <Layout />,
+          children: [
+            {
+              index: true,
+              element: <Dashboard />,
+            },
+            {
+              path: "calendar",
+              element: <Calendar />,
+            },
+            {
+              path: "widget",
+              element: <Widget />,
+            },
+            {
+              path: "settings",
+              element: <Settings />,
+            },
+            {
+              path: "account",
+              element: <Account />,
+            },
+          ],
         },
-        {
-          path: "calendar",
-          element: (
-            <ProtectedRoute>
-              <Calendar />
-            </ProtectedRoute>
-          ),
-        },
-        {
-          path: "widget",
-          element: (
-            <ProtectedRoute>
-              <Widget />
-            </ProtectedRoute>
-          ),
-        },
-        {
-          path: "settings",
-          element: (
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          ),
-        },
-        {
-          path: "account",
-          element: (
-            <ProtectedRoute>
-              <Account />
-            </ProtectedRoute>
-          ),
-        },
-        // {
-        //   path: "/widget-preview",
-        //   element: <WidgetPreview />,
-        // },
       ],
     },
     {
@@ -101,29 +63,20 @@ function App() {
       element: <ForgotPassword />,
     },
     {
-      // Add a dedicated route for OAuth callbacks
+      path: "/reset-password",
+      element: <ResetPassword />,
+    },
+    {
+      // Auth callback route for OAuth providers
       path: "/auth/callback",
-      element: (
-        <ProtectedRoute>
-          <OAuthCallback />
-        </ProtectedRoute>
-      ),
+      element: <OAuthCallback />,
     },
   ]);
 
   return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      appearance={{
-        elements: {
-          rootBox: "mx-auto",
-          card: "shadow-md rounded-md border border-gray-200",
-          formButtonPrimary: "bg-primary hover:bg-primary-dark",
-        },
-      }}
-    >
+    <SupabaseAuthProvider>
       <RouterProvider router={router} />
-    </ClerkProvider>
+    </SupabaseAuthProvider>
   );
 }
 

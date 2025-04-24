@@ -4,43 +4,44 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Basic client for unauthenticated operations
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create a single supabase client for the entire app
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    storageKey: "availnow-auth-storage",
+  },
+});
 
-/**
- * Create a Supabase client that uses Clerk session tokens
- * @param {string} session - Clerk session token
- * @returns {Object} Supabase client
- */
-export function createClerkSupabaseClient(session) {
-  // Create a headers object with Authorization
-  const headers = {};
+// Function to get user profile data
+export async function getUserProfile(userId) {
+  if (!userId) return null;
 
-  if (session) {
-    headers.Authorization = `Bearer ${session}`;
-  }
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
 
-  // Create a client with the headers
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: headers,
-    },
-    auth: {
-      persistSession: false,
-    },
-  });
-}
-
-/**
- * Get JWT payload for debugging
- */
-export async function getJwtPayload() {
-  try {
-    const { data, error } = await supabase.rpc("get_jwt_payload");
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error("Error getting JWT payload:", error);
+  if (error) {
+    console.error("Error fetching user profile:", error);
     return null;
   }
+
+  return data;
+}
+
+// Function to create or update a user profile
+export async function upsertUserProfile(profile) {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .upsert(profile)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating user profile:", error);
+    throw error;
+  }
+
+  return data;
 }

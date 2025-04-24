@@ -1,116 +1,59 @@
-// src/components/auth/OAuthCallback.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
+import { supabase } from "../../lib/supabase";
 import { Loader } from "lucide-react";
-import { handleCalendarCallback } from "../../lib/calendarService";
 
 const OAuthCallback = () => {
   const navigate = useNavigate();
-  const { userId } = useAuth();
-  const [status, setStatus] = useState("processing");
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const processCallback = async () => {
+    const handleAuthCallback = async () => {
       try {
-        setStatus("processing");
-
-        // Log the complete URL for debugging
-        console.log("OAuth Callback URL:", window.location.href);
-
-        // Get URL parameters
-        const searchParams = new URLSearchParams(window.location.search);
-        const code = searchParams.get("code");
-        const state = searchParams.get("state");
-
-        // Get provider from localStorage
-        const provider = localStorage.getItem("calendarAuthProvider");
-
-        console.log("OAuth Callback Parameters:", {
-          code: code ? "PRESENT" : "NULL",
-          state: state ? "PRESENT" : "NULL",
-          provider,
-        });
-
-        if (!code || !state || !provider) {
-          throw new Error("Missing required OAuth parameters");
-        }
-
-        if (!userId) {
-          throw new Error("User not authenticated");
-        }
-
         // Process the OAuth callback
-        const result = await handleCalendarCallback(
-          provider,
-          { code, state },
-          userId
-        );
+        const { data, error } = await supabase.auth.getSession();
 
-        // Store the result in sessionStorage for the calendar component
-        sessionStorage.setItem(
-          "oauth_callback_result",
-          JSON.stringify({
-            success: true,
-            provider,
-            calendars: result.calendars,
-          })
-        );
+        if (error) {
+          throw error;
+        }
 
-        // Clean up
-        localStorage.removeItem("calendarAuthProvider");
+        if (data?.session) {
+          // Store a flag in sessionStorage to indicate which callback is being processed
+          const previousCallback = sessionStorage.getItem(
+            "oauth_callback_type"
+          );
 
-        setStatus("success");
-
-        // Redirect back to the calendar page after a short delay
-        setTimeout(() => {
-          navigate("/calendar", { replace: true });
-        }, 1500);
+          if (previousCallback === "calendar") {
+            navigate("/calendar", { replace: true });
+          } else {
+            navigate("/", { replace: true });
+          }
+        } else {
+          throw new Error("No session detected during OAuth callback");
+        }
       } catch (err) {
-        console.error("Error processing OAuth callback:", err);
-        setError(err.message || "Failed to connect calendar");
-        setStatus("error");
-
-        // Store the error for the calendar component
-        sessionStorage.setItem(
-          "oauth_callback_error",
-          JSON.stringify({
-            message: err.message || "Failed to connect calendar",
-          })
-        );
-
-        // Redirect after error with a longer delay
+        console.error("Error during OAuth callback:", err);
+        setError(err.message || "Authentication failed");
         setTimeout(() => {
-          navigate("/calendar", { replace: true });
+          navigate("/login", { replace: true });
         }, 3000);
       }
     };
 
-    processCallback();
-  }, [userId, navigate]);
+    handleAuthCallback();
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-        <h1 className="text-xl font-bold mb-4">Calendar Connection</h1>
+      <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-md text-center">
+        <h2 className="text-2xl font-bold text-primary mb-4">AvailNow</h2>
 
-        {status === "processing" && (
+        {error ? (
           <>
-            <Loader className="animate-spin h-12 w-12 mx-auto mb-4 text-primary" />
-            <p>Processing your calendar connection...</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Please wait, you'll be redirected automatically.
-            </p>
-          </>
-        )}
-
-        {status === "success" && (
-          <>
-            <div className="h-12 w-12 rounded-full bg-green-100 text-green-500 flex items-center justify-center mx-auto mb-4">
+            <div className="text-red-600 mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
+                className="h-12 w-12 mx-auto mb-2"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -119,41 +62,22 @@ const OAuthCallback = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M5 13l4 4L19 7"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
+              <p className="font-medium">Authentication Error</p>
             </div>
-            <p className="text-green-600 font-medium">
-              Calendar connected successfully!
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              Redirecting you back to calendar settings...
-            </p>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <p className="text-gray-500">Redirecting you to login...</p>
           </>
-        )}
-
-        {status === "error" && (
+        ) : (
           <>
-            <div className="h-12 w-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </div>
-            <p className="text-red-600 font-medium">Connection failed</p>
-            <p className="text-sm text-gray-700 mt-2">{error}</p>
-            <p className="text-sm text-gray-500 mt-4">
-              Redirecting you back to calendar settings...
+            <Loader className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+            <p className="text-lg font-medium mb-2">
+              Finalizing your authentication
+            </p>
+            <p className="text-gray-600">
+              Please wait while we complete the process...
             </p>
           </>
         )}

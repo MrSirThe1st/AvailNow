@@ -24,6 +24,13 @@ export const CALENDAR_PROVIDERS = {
  */
 export const initiateCalendarAuth = (provider) => {
   console.log("Initiating auth for provider:", provider);
+
+  // Store the provider in localStorage to handle callbacks
+  localStorage.setItem("calendarAuthProvider", provider);
+
+  // Also store a flag in sessionStorage to indicate this is a calendar callback
+  sessionStorage.setItem("oauth_callback_type", "calendar");
+
   switch (provider) {
     case CALENDAR_PROVIDERS.GOOGLE:
       return googleCalendar.initiateGoogleAuth();
@@ -52,20 +59,15 @@ export const initiateCalendarAuth = (provider) => {
  * @param {string} userId - User ID to associate with this integration
  * @returns {Promise<Object>} Connection response with tokens and calendars
  */
-export const handleCalendarCallback = async (
-  provider,
-  params,
-  userId,
-  supabaseClient
-) => {
+export const handleCalendarCallback = async (provider, params, userId) => {
   switch (provider) {
     case CALENDAR_PROVIDERS.GOOGLE:
       return googleCalendar.handleGoogleCallback(
         params.code,
         params.state,
-        userId,
-        supabaseClient
+        userId
       );
+
     case CALENDAR_PROVIDERS.OUTLOOK:
       // return outlookCalendar.handleOutlookCallback(params.code, params.state, userId);
       throw new Error("Outlook Calendar integration not yet implemented");
@@ -181,17 +183,17 @@ export const fetchCalendarEvents = async (
   endDate
 ) => {
   try {
-    // First get the integration details - using eq for both user_id and provider
+    // First get the integration details
     const { data: integration, error: integrationError } = await supabase
       .from("calendar_integrations")
       .select("*")
       .eq("user_id", userId)
       .eq("provider", provider)
-      .maybeSingle(); // Use maybeSingle instead of single to avoid error when no row found
+      .single();
 
     if (integrationError || !integration) {
       console.error("Failed to fetch calendar integration:", integrationError);
-      return []; // Return empty array instead of throwing error for better UX
+      throw new Error("Calendar integration not found");
     }
 
     // Now fetch events based on the provider

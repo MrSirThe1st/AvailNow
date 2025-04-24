@@ -1,11 +1,10 @@
-// src/components/layout/Header.jsx
 import { Link } from "react-router-dom";
 import { Bell, Settings, User, LogOut } from "lucide-react";
-import { useClerk } from "@clerk/clerk-react";
+import { useAuth } from "../../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
 
 const Header = () => {
-  const { signOut } = useClerk();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
