@@ -1,5 +1,5 @@
 // src/components/calendar/CalendarView.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Loader, AlertTriangle } from "lucide-react";
 import { fetchCalendarEvents } from "../../lib/calendarService";
 
@@ -28,19 +28,14 @@ const MONTHS = [
   "December",
 ];
 
-const CalendarView = ({
-  onAddCalendar,
-  supabaseClient,
-  user,
-  connectedCalendars = [],
-}) => {
+const CalendarView = ({ onAddCalendar, user, connectedCalendars = [] }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState("week"); // 'day', 'week', 'month'
+  const [view, setView] = useState("week");
   const [calendarEvents, setCalendarEvents] = useState([]);
-  const [businessHours, setBusinessHours] = useState({
+  const [businessHours] = useState({
     startTime: "09:00",
     endTime: "17:00",
-    workingDays: [1, 2, 3, 4, 5], // Monday to Friday
+    workingDays: [1, 2, 3, 4, 5],
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -49,10 +44,100 @@ const CalendarView = ({
   // Hours to display in the calendar
   const displayHours = Array.from({ length: 12 }, (_, i) => i + 8); // 8am to 7pm
 
+  // Get date range for current view
+  const getDateRange = useCallback(() => {
+    const startDate = new Date(currentDate);
+    const endDate = new Date(currentDate);
+
+    if (view === "day") {
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (view === "week") {
+      const day = startDate.getDay();
+      startDate.setDate(startDate.getDate() - day);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (view === "month") {
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setMonth(endDate.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    return { startDate, endDate };
+  }, [currentDate, view]);
+
+  // Update month label
+  const updateMonthLabel = useCallback(() => {
+    setCurrentMonthLabel(
+      `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+    );
+  }, [currentDate]);
+
+  // Load calendar events for the current date range
+  const loadCalendarEvents = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      let events = [];
+
+      // Get date range first
+      const { startDate, endDate } = getDateRange();
+
+      if (connectedCalendars && connectedCalendars.length > 0) {
+        try {
+          console.log("Fetching calendar events for connected calendars");
+
+          // Get connected calendars with actual IDs
+          const calendarsToFetch = connectedCalendars.map((integration) => ({
+            id: integration.calendar_id || integration.id,
+            provider: integration.provider,
+          }));
+
+          const eventsPromises = calendarsToFetch.map(async (calendar) => {
+            try {
+              return await fetchCalendarEvents(
+                user.id,
+                calendar.provider || "google",
+                "primary",
+                startDate,
+                endDate
+              );
+            } catch (err) {
+              console.error(
+                `Failed to fetch events for calendar ${calendar.id}:`,
+                err
+              );
+              return [];
+            }
+          });
+
+          const eventArrays = await Promise.all(eventsPromises);
+          events = eventArrays.flat();
+          console.log("Fetched real calendar events:", events.length);
+        } catch (err) {
+          console.error("Error fetching calendar events:", err);
+          events = generateMockEvents(startDate, endDate);
+        }
+      } else {
+        events = generateMockEvents(startDate, endDate);
+      }
+
+      setCalendarEvents(events);
+      console.log("Calendar events loaded:", events.length);
+    } catch (err) {
+      console.error("Error loading calendar events:", err);
+      setError("Failed to load calendar events. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [connectedCalendars, user, getDateRange]);
+
   // Update month label whenever the current date changes
   useEffect(() => {
     updateMonthLabel();
-  }, [currentDate]);
+  }, [currentDate, updateMonthLabel]);
 
   // Load calendar events when date, view, or connected calendars change
   useEffect(() => {
@@ -63,65 +148,7 @@ const CalendarView = ({
       );
       loadCalendarEvents();
     }
-  }, [currentDate, view, connectedCalendars]);
-
-  // Update month label
-  const updateMonthLabel = () => {
-    setCurrentMonthLabel(
-      `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
-    );
-  };
-
-  // Load calendar events for the current date range
-  const loadCalendarEvents = async () => {
-    if (!connectedCalendars || connectedCalendars.length === 0) return;
-
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const { startDate, endDate } = getDateRange();
-
-      console.log("Fetching calendar events for date range:", {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      });
-
-      // Replace mock events with actual Google Calendar events
-      const events = await Promise.all(
-        connectedCalendars.map(async (calendar) => {
-          try {
-            return await fetchCalendarEvents(
-              user.id,
-              calendar.provider || "google", // Default to google if no provider specified
-              calendar.calendar_id || calendar.id, // Handle both id formats
-              startDate,
-              endDate
-            );
-          } catch (err) {
-            console.error(
-              `Failed to fetch events for calendar ${calendar.id}:`,
-              err
-            );
-            return [];
-          }
-        })
-      );
-
-      // Flatten and sort all events
-      const allEvents = events
-        .flat()
-        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-
-      setCalendarEvents(allEvents);
-      console.log("Calendar events loaded:", allEvents.length);
-    } catch (err) {
-      console.error("Error loading calendar events:", err);
-      setError("Failed to load calendar events. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [currentDate, view, connectedCalendars, loadCalendarEvents]);
 
   // Generate mock events for testing
   const generateMockEvents = (startDate, endDate) => {
@@ -163,35 +190,6 @@ const CalendarView = ({
     }
 
     return events;
-  };
-
-  // Get date range for current view
-  const getDateRange = () => {
-    const startDate = new Date(currentDate);
-    const endDate = new Date(currentDate);
-
-    if (view === "day") {
-      // Just the current day
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (view === "week") {
-      // Current week (Sunday to Saturday)
-      const day = startDate.getDay(); // 0 = Sunday, 6 = Saturday
-      startDate.setDate(startDate.getDate() - day); // Go to start of week (Sunday)
-      startDate.setHours(0, 0, 0, 0);
-
-      endDate.setDate(startDate.getDate() + 6); // Go to end of week (Saturday)
-      endDate.setHours(23, 59, 59, 999);
-    } else if (view === "month") {
-      // Current month
-      startDate.setDate(1); // First of the month
-      startDate.setHours(0, 0, 0, 0);
-
-      endDate.setMonth(endDate.getMonth() + 1, 0); // Last of the month
-      endDate.setHours(23, 59, 59, 999);
-    }
-
-    return { startDate, endDate };
   };
 
   // Generate dates for the current view
@@ -280,9 +278,13 @@ const CalendarView = ({
   };
 
   // Check if a date is within working days
-  const isWorkingDay = (date) => {
-    return businessHours.workingDays.includes(date.getDay());
-  };
+  // eslint-disable-next-line no-unused-vars
+  const isWorkingDay = useCallback(
+    (date) => {
+      return businessHours.workingDays.includes(date.getDay());
+    },
+    [businessHours.workingDays]
+  );
 
   // Check if there are events at a specific time
   const getEventsAtTime = (date, hour) => {
@@ -300,11 +302,6 @@ const CalendarView = ({
         (eventStart >= timeToCheck && eventEnd <= timeEnd) // Event is fully contained in this hour
       );
     });
-  };
-
-  // Check if a specific time slot is available (no events)
-  const isTimeAvailable = (date, hour) => {
-    return getEventsAtTime(date, hour).length === 0 && isWorkingDay(date);
   };
 
   // Render table style calendar for week view

@@ -1,17 +1,43 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Code, Share2, Globe } from "lucide-react";
 import EmbedWidget from "../components/widgets/EmbedWidget";
 import EmbedCodeGenerator from "../components/widgets/EmbedCodeGenerator";
+import { useAuth } from "../context/SupabaseAuthContext";
+import { getWidgetSettings } from "../lib/supabaseHelpers";
 
 const Widget = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("website");
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [widgetSettings, setWidgetSettings] = useState(null);
 
-  // Mock user ID - in a real app, this would be the current user's ID
-  const userId = "user123";
+  // URL for the standalone page - using user's ID
+  const standalonePage = user
+    ? `https://${user.id}.availnow.com`
+    : `https://yourusername.availnow.com`;
 
-  // URL for the standalone page
-  const standalonePage = `https://yourusername.availnow.com`;
+  // Load widget settings on component mount
+  useEffect(() => {
+    const loadWidgetSettings = async () => {
+      if (user) {
+        try {
+          setLoading(true);
+          const settings = await getWidgetSettings(user.id);
+          setWidgetSettings(settings);
+          setError(null);
+        } catch (err) {
+          console.error("Error loading widget settings:", err);
+          setError("Failed to load widget settings");
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadWidgetSettings();
+  }, [user]);
 
   // Handle copying standalone page URL
   const copyStandalonePage = () => {
@@ -26,9 +52,24 @@ const Widget = () => {
       });
   };
 
+  if (loading) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4">Loading widget settings...</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Widget Configuration</h1>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow mb-6">
         <div className="flex border-b mb-4">
@@ -70,8 +111,9 @@ const Widget = () => {
             </div>
 
             <EmbedCodeGenerator
-              userId={userId}
-              previewComponent={<EmbedWidget userId={userId} />}
+              userId={user?.id}
+              previewComponent={<EmbedWidget userId={user?.id} />}
+              initialSettings={widgetSettings}
             />
           </div>
         ) : (
@@ -109,7 +151,7 @@ const Widget = () => {
               <div>
                 <h3 className="font-medium mb-2">Preview</h3>
                 <div className="border rounded-md p-4 bg-gray-50 flex justify-center">
-                  <EmbedWidget userId={userId} />
+                  <EmbedWidget userId={user?.id} />
                 </div>
               </div>
 

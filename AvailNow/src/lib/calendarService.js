@@ -196,6 +196,26 @@ export const fetchCalendarEvents = async (
       throw new Error("Calendar integration not found");
     }
 
+    // Check if token is expired and refresh if needed
+    const now = new Date();
+    const tokenExpiresAt = new Date(integration.expires_at);
+
+    // If token expires in less than 5 minutes, refresh it
+    if (tokenExpiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
+      console.log("Access token expired or about to expire, refreshing...");
+
+      if (provider === CALENDAR_PROVIDERS.GOOGLE && integration.refresh_token) {
+        const newTokenData = await googleCalendar.refreshGoogleToken(
+          integration.refresh_token
+        );
+
+        // Update the integration with the new token
+        integration.access_token = newTokenData.access_token;
+      } else {
+        throw new Error("Unable to refresh token");
+      }
+    }
+
     // Now fetch events based on the provider
     switch (provider) {
       case CALENDAR_PROVIDERS.GOOGLE:

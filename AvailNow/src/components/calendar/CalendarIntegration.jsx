@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Calendar, User, Loader, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth, useClerk } from "@clerk/clerk-react";
+import { useAuth } from "../../context/SupabaseAuthContext";
 import {
   CALENDAR_PROVIDERS,
   initiateCalendarAuth,
@@ -12,7 +12,7 @@ import {
 const CalendarIntegration = ({ onClose, onSuccess }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userId } = useAuth();
+  const { user } = useAuth();
   const [userData, setUserData] = useState(null);
 
   const [step, setStep] = useState("select");
@@ -49,15 +49,15 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     },
   ];
 
-  // Set user data when userId is available
+  // Set user data when user is available
   useEffect(() => {
-    if (userId) {
-      setUserData({ id: userId });
-      console.log("User authenticated:", userId);
+    if (user?.id) {
+      setUserData({ id: user.id });
+      console.log("User authenticated:", user.id);
     } else {
       console.error("No authenticated user found");
     }
-  }, [userId]);
+  }, [user]);
 
   // Check for OAuth callback using both location and window.location
   useEffect(() => {

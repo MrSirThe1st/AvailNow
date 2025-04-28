@@ -3,14 +3,15 @@ import React, { useState, useEffect } from "react";
 import { Loader } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
-import TimeSelector from "../components/calendar/TimeSelector";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
 import { useOutletContext } from "react-router-dom";
 import { handleCalendarCallback } from "../lib/calendarService";
+import { useAuth } from "../context/SupabaseAuthContext";
+import { supabase } from "../lib/supabase";
 
 const Calendar = () => {
-  // Get the user and Supabase client from the layout context
-  const { user, supabaseClient } = useOutletContext();
+  // Get the Supabase user from our auth context
+  const { user } = useAuth();
   const location = useLocation();
 
   const [calendarSettings, setCalendarSettings] = useState(null);
@@ -102,15 +103,13 @@ const Calendar = () => {
 
   // Load connected calendars on mount
   useEffect(() => {
-    if (supabaseClient) {
+    if (user) {
       loadConnectedCalendars();
     }
-  }, [supabaseClient, user]);
+  }, [user]);
 
   // Load connected calendars
   const loadConnectedCalendars = async () => {
-    if (!supabaseClient) return;
-
     try {
       setIsLoading(true);
       setError(null);
@@ -118,7 +117,7 @@ const Calendar = () => {
       console.log("Loading connected calendars");
 
       // Query without filtering by user ID first to see if any exist
-      const { data: allIntegrations, error: allError } = await supabaseClient
+      const { data: allIntegrations, error: allError } = await supabase
         .from("calendar_integrations")
         .select("*");
 
@@ -129,11 +128,10 @@ const Calendar = () => {
 
       // Now try with the user ID filter
       if (user?.id) {
-        const { data: userIntegrations, error: userError } =
-          await supabaseClient
-            .from("calendar_integrations")
-            .select("*")
-            .eq("user_id", user.id);
+        const { data: userIntegrations, error: userError } = await supabase
+          .from("calendar_integrations")
+          .select("*")
+          .eq("user_id", user.id);
 
         if (userError) {
           console.error("Error fetching user integrations:", userError);
@@ -167,8 +165,6 @@ const Calendar = () => {
 
   // Handle adding new calendar integration
   const handleAddCalendar = async (newCalendars) => {
-    if (!supabaseClient) return;
-
     try {
       console.log("Adding new calendars:", newCalendars);
 
@@ -176,17 +172,19 @@ const Calendar = () => {
       if (newCalendars && newCalendars.length > 0) {
         setCalendarsList(newCalendars);
 
-        // Create a fake integration object since database query doesn't work
-        const fakeIntegration = {
-          id: "google-integration",
+        // Create integration objects based on the calendars
+        const integrations = newCalendars.map((calendar) => ({
+          id: calendar.id, // Use actual Google Calendar ID
           provider: "google",
           user_id: user.id,
+          calendar_id: calendar.id,
+          name: calendar.name,
           created_at: new Date().toISOString(),
           access_token: "present",
           expires_at: new Date(Date.now() + 3600000).toISOString(),
-        };
+        }));
 
-        setConnectedCalendars([fakeIntegration]);
+        setConnectedCalendars(integrations);
       }
 
       setShowCalendarModal(false);
@@ -253,7 +251,6 @@ const Calendar = () => {
           connectedCalendars={connectedCalendars}
           calendarsList={calendarsList}
           onAddCalendar={() => setShowCalendarModal(true)}
-          supabaseClient={supabaseClient}
           user={user}
         />
       </div>
@@ -281,7 +278,6 @@ const Calendar = () => {
             <CalendarIntegration
               onClose={() => setShowCalendarModal(false)}
               onSuccess={handleAddCalendar}
-              supabaseClient={supabaseClient}
               user={user}
             />
           </div>

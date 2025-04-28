@@ -1,18 +1,32 @@
 // src/hooks/useSupabaseAuth.js
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/clerk-react";
-import { createClerkSupabaseClient } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 export function useSupabaseAuth() {
-  const { getToken } = useAuth();
-  const [supabase, setSupabase] = useState(null);
+  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const client = createClerkSupabaseClient(getToken);
-    setSupabase(client);
-  }, [getToken]);
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user || null);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return {
+    session,
+    user,
     supabase,
   };
 }
