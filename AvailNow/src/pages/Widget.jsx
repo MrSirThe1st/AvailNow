@@ -1,58 +1,101 @@
 import React, { useState, useEffect } from "react";
-import { Code, Share2, Globe } from "lucide-react";
+import {
+  Code,
+  Share2,
+  Globe,
+  Clipboard,
+  Check,
+  ExternalLink,
+  BarChart3,
+} from "lucide-react";
 import EmbedWidget from "../components/widgets/EmbedWidget";
 import EmbedCodeGenerator from "../components/widgets/EmbedCodeGenerator";
 import { useAuth } from "../context/SupabaseAuthContext";
-import { getWidgetSettings } from "../lib/supabaseHelpers";
+import { useWidgetEmbed } from "../hooks/useWidgetEmbed";
+import { useWidgetSettings } from "../hooks/useWidgetSettings";
+import { getWidgetStatistics } from "../lib/widgetService";
+import toast from "react-hot-toast";
 
 const Widget = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("website");
-  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [widgetSettings, setWidgetSettings] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState({
+    views: 0,
+    clicks: 0,
+    bookings: 0,
+    last_updated: null,
+  });
 
-  // URL for the standalone page - using user's ID
-  const standalonePage = user
-    ? `https://${user.id}.availnow.com`
-    : `https://yourusername.availnow.com`;
+  // Use the custom hooks to manage widget settings and embed code
+  const {
+    settings,
+    updateSettings,
+    saveSettings: saveWidgetSettings,
+    loading: settingsLoading,
+  } = useWidgetSettings(user?.id);
 
-  // Load widget settings on component mount
+  const {
+    embedCode,
+    copyToClipboard,
+    getStandalonePageUrl,
+    copyStandalonePageUrl,
+    generateIframeCode,
+  } = useWidgetEmbed(user?.id, settings);
+
+  const standalonePage = getStandalonePageUrl();
+
+  // Fetch widget statistics on mount
   useEffect(() => {
-    const loadWidgetSettings = async () => {
-      if (user) {
-        try {
-          setLoading(true);
-          const settings = await getWidgetSettings(user.id);
-          setWidgetSettings(settings);
-          setError(null);
-        } catch (err) {
-          console.error("Error loading widget settings:", err);
-          setError("Failed to load widget settings");
-        } finally {
-          setLoading(false);
-        }
+    const fetchStats = async () => {
+      if (!user?.id) return;
+
+      try {
+        setLoading(true);
+        const widgetStats = await getWidgetStatistics(user.id);
+        setStats(widgetStats);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching widget statistics:", err);
+        setError("Failed to load widget statistics");
+      } finally {
+        setLoading(false);
       }
     };
 
-    loadWidgetSettings();
+    fetchStats();
   }, [user]);
 
-  // Handle copying standalone page URL
-  const copyStandalonePage = () => {
-    navigator.clipboard
-      .writeText(standalonePage)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy URL to clipboard:", err);
-      });
+  // Format date from ISO string
+  const formatDate = (isoString) => {
+    if (!isoString) return "Never";
+    const date = new Date(isoString);
+    return date.toLocaleString();
   };
 
-  if (loading) {
+  // Handle copying standalone page URL
+  const handleCopyStandaloneUrl = async () => {
+    const success = await copyStandalonePageUrl();
+    if (success) {
+      toast.success("URL copied to clipboard");
+    } else {
+      toast.error("Failed to copy URL");
+    }
+  };
+
+  // Handle saving settings
+  const handleSaveSettings = async () => {
+    const success = await saveWidgetSettings();
+    if (success) {
+      toast.success("Settings saved successfully");
+    } else {
+      toast.error("Failed to save settings");
+    }
+  };
+
+  if (loading && !user) {
     return (
       <div className="p-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
@@ -71,6 +114,52 @@ const Widget = () => {
         </div>
       )}
 
+      {/* Stats cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow flex items-center">
+          <div className="p-3 bg-blue-100 rounded-full mr-4">
+            <BarChart3 size={20} className="text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Views</p>
+            <p className="text-2xl font-bold">{stats.views || 0}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow flex items-center">
+          <div className="p-3 bg-green-100 rounded-full mr-4">
+            <ExternalLink size={20} className="text-green-600" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Clicks</p>
+            <p className="text-2xl font-bold">{stats.clicks || 0}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow flex items-center">
+          <div className="p-3 bg-violet-100 rounded-full mr-4">
+            <Code size={20} className="text-violet-600" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Bookings</p>
+            <p className="text-2xl font-bold">{stats.bookings || 0}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow flex items-center">
+          <div className="p-3 bg-amber-100 rounded-full mr-4">
+            <Share2 size={20} className="text-amber-600" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Last Updated</p>
+            <p className="text-sm font-medium">
+              {formatDate(stats.last_updated)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main widget configuration sections */}
       <div className="bg-white p-6 rounded-lg shadow mb-6">
         <div className="flex border-b mb-4">
           <button
@@ -113,7 +202,7 @@ const Widget = () => {
             <EmbedCodeGenerator
               userId={user?.id}
               previewComponent={<EmbedWidget userId={user?.id} />}
-              initialSettings={widgetSettings}
+              initialSettings={settings}
             />
           </div>
         ) : (
@@ -140,9 +229,19 @@ const Widget = () => {
                 </div>
                 <button
                   className="px-4 py-4 bg-primary text-white rounded-r-md border border-primary hover:bg-primary-dark transition-colors"
-                  onClick={copyStandalonePage}
+                  onClick={handleCopyStandaloneUrl}
                 >
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? (
+                    <>
+                      <Check size={16} className="mr-1" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard size={16} className="mr-1" />
+                      Copy
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -264,7 +363,11 @@ const Widget = () => {
             <label className="block text-sm font-medium mb-1">
               Header Style
             </label>
-            <select className="w-full border rounded-md p-2">
+            <select
+              className="w-full border rounded-md p-2"
+              value={settings.headerStyle || "modern"}
+              onChange={(e) => updateSettings({ headerStyle: e.target.value })}
+            >
               <option value="modern">Modern</option>
               <option value="classic">Classic</option>
               <option value="minimal">Minimal</option>
@@ -275,7 +378,11 @@ const Widget = () => {
             <label className="block text-sm font-medium mb-1">
               Font Family
             </label>
-            <select className="w-full border rounded-md p-2">
+            <select
+              className="w-full border rounded-md p-2"
+              value={settings.fontFamily || "system"}
+              onChange={(e) => updateSettings({ fontFamily: e.target.value })}
+            >
               <option value="system">System Default</option>
               <option value="sans-serif">Sans Serif</option>
               <option value="serif">Serif</option>
@@ -287,13 +394,27 @@ const Widget = () => {
             <label className="block text-sm font-medium mb-1">
               Border Radius
             </label>
-            <select className="w-full border rounded-md p-2">
+            <select
+              className="w-full border rounded-md p-2"
+              value={settings.borderRadius || "medium"}
+              onChange={(e) => updateSettings({ borderRadius: e.target.value })}
+            >
               <option value="none">None</option>
               <option value="small">Small</option>
               <option value="medium">Medium</option>
               <option value="large">Large</option>
             </select>
           </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={handleSaveSettings}
+            disabled={settingsLoading}
+            className="px-4 py-2 bg-primary text-white rounded-md"
+          >
+            {settingsLoading ? "Saving..." : "Save Settings"}
+          </button>
         </div>
       </div>
     </div>

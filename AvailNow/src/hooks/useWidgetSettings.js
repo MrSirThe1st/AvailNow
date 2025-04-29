@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import {
-  getWidgetSettings,
-  saveWidgetSettings,
+  getWidgetSettings as fetchWidgetSettings,
   getDefaultWidgetSettings,
+  saveWidgetSettings as saveSettings,
 } from "../lib/widgetService";
 
 /**
- * Custom hook to manage widget settings
- * @param {string} userId - Supabase user ID
+ * Custom hook to manage widget settings with real data from Supabase
+ * @param {string} userId - User ID
  * @returns {Object} - Widget settings and methods to update them
  */
 export const useWidgetSettings = (userId) => {
@@ -25,7 +25,7 @@ export const useWidgetSettings = (userId) => {
         setLoading(true);
         setError(null);
 
-        const data = await getWidgetSettings(userId);
+        const data = await fetchWidgetSettings(userId);
         setSettings(data);
         setIsDirty(false);
       } catch (err) {
@@ -64,14 +64,20 @@ export const useWidgetSettings = (userId) => {
   };
 
   // Save settings to the database
-  const saveSettings = async () => {
-    if (!userId) return;
+  const saveWidgetSettings = async () => {
+    if (!userId) return false;
 
     try {
       setLoading(true);
       setError(null);
 
-      await saveWidgetSettings(userId, settings);
+      // Ensure user_id is set
+      const dataToSave = {
+        ...settings,
+        user_id: userId,
+      };
+
+      await saveSettings(userId, dataToSave);
       setIsDirty(false);
       return true;
     } catch (err) {
@@ -88,7 +94,7 @@ export const useWidgetSettings = (userId) => {
     updateSetting,
     updateSettings,
     resetToDefaults,
-    saveSettings,
+    saveSettings: saveWidgetSettings,
     loading,
     error,
     isDirty,

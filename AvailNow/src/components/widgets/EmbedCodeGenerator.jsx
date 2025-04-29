@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { Check, Clipboard, Code } from "lucide-react";
+import {
+  getWidgetSettings,
+  saveWidgetSettings,
+  generateWidgetEmbedCode,
+} from "../../lib/widgetService";
+import { useAuth } from "../../context/SupabaseAuthContext";
+import toast from "react-hot-toast";
 
-const EmbedCodeGenerator = ({ userId, previewComponent }) => {
+const EmbedCodeGenerator = ({
+  userId,
+  previewComponent,
+  initialSettings = null,
+}) => {
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [widgetSettings, setWidgetSettings] = useState({
     theme: "light",
     accentColor: "#0070f3",
@@ -14,39 +28,41 @@ const EmbedCodeGenerator = ({ userId, previewComponent }) => {
 
   const [embedCode, setEmbedCode] = useState("");
 
+  // Load initial settings if provided or fetch from database
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (initialSettings) {
+        setWidgetSettings(initialSettings);
+        return;
+      }
+
+      if (!userId) return;
+
+      try {
+        setLoading(true);
+        const settings = await getWidgetSettings(userId);
+        setWidgetSettings(settings);
+      } catch (err) {
+        console.error("Error loading widget settings:", err);
+        setError("Failed to load widget settings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, [userId, initialSettings]);
+
   // Generate the embed code whenever settings change
   useEffect(() => {
-    generateEmbedCode();
-  }, [widgetSettings]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Generate the embed code based on widget settings
-  const generateEmbedCode = () => {
-    const settingsParam = encodeURIComponent(
-      JSON.stringify({
-        userId,
-        ...widgetSettings,
-      })
-    );
-
-    const code = `<!-- AvailNow Widget -->
-<div id="availnow-widget"></div>
-<script src="https://widget.availnow.com/embed.js"></script>
-<script>
-  AvailNow.initialize({
-    selector: "#availnow-widget",
-    userId: "${userId}",
-    theme: "${widgetSettings.theme}",
-    accentColor: "${widgetSettings.accentColor}",
-    textColor: "${widgetSettings.textColor}",
-    buttonText: "${widgetSettings.buttonText}",
-    showDays: ${widgetSettings.showDays},
-    compact: ${widgetSettings.compact}
-  });
-</script>
-<!-- End AvailNow Widget -->`;
-
-    setEmbedCode(code);
-  };
+    if (!userId) return;
+    try {
+      const code = generateWidgetEmbedCode(userId, widgetSettings);
+      setEmbedCode(code);
+    } catch (err) {
+      console.error("Error generating embed code:", err);
+    }
+  }, [widgetSettings, userId]);
 
   // Handle setting changes
   const handleSettingChange = (setting, value) => {
@@ -56,17 +72,33 @@ const EmbedCodeGenerator = ({ userId, previewComponent }) => {
     }));
   };
 
+  // Save settings to database
+  const handleSaveSettings = async () => {
+    if (!userId) return;
+
+    try {
+      setLoading(true);
+      await saveWidgetSettings(userId, widgetSettings);
+      toast.success("Widget settings saved successfully");
+    } catch (err) {
+      console.error("Error saving widget settings:", err);
+      toast.error("Failed to save widget settings");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Copy code to clipboard
-  const copyToClipboard = () => {
-    navigator.clipboard
-      .writeText(embedCode)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy code to clipboard:", err);
-      });
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Copied to clipboard");
+    } catch (err) {
+      console.error("Failed to copy code to clipboard:", err);
+      toast.error("Failed to copy code");
+    }
   };
 
   return (
@@ -217,6 +249,17 @@ const EmbedCodeGenerator = ({ userId, previewComponent }) => {
               />
             </div>
           </div>
+        </div>
+
+        {/* Save button */}
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={handleSaveSettings}
+            disabled={loading}
+            className="px-4 py-2 bg-primary text-white rounded-md"
+          >
+            {loading ? "Saving..." : "Save Settings"}
+          </button>
         </div>
       </div>
 

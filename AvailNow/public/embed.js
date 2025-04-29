@@ -1,7 +1,7 @@
 /**
  * AvailNow Widget Embed Script
  * This script is designed to be embedded on external websites to display
- * the AvailNow availability widget.
+ * the AvailNow availability widget with real data from the AvailNow API.
  */
 
 (function (window, document) {
@@ -21,6 +21,11 @@
     showDays: 5,
     compact: false,
   };
+
+  // API endpoints
+  const API_BASE_URL = "https://api.availnow.com/v1";
+  const WIDGET_DATA_ENDPOINT = `${API_BASE_URL}/widget`;
+  const WIDGET_TRACK_ENDPOINT = `${API_BASE_URL}/track`;
 
   /**
    * Initialize the AvailNow widget
@@ -58,10 +63,10 @@
     loadStyles();
 
     // Fetch availability data from the API
-    fetchAvailability(settings.userId, settings.showDays)
-      .then((availabilityData) => {
+    fetchWidgetData(settings.userId)
+      .then((widgetData) => {
         // Render the widget with the data
-        renderWidget(container, availabilityData, settings);
+        renderWidget(container, widgetData, settings);
       })
       .catch((error) => {
         console.error("AvailNow: Error fetching availability data", error);
@@ -92,74 +97,186 @@
         max-height: 400px;
         overflow-y: auto;
       }
+      .availnow-widget-spinner {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        border: 3px solid rgba(0, 112, 243, 0.2);
+        border-radius: 50%;
+        border-top-color: #0070f3;
+        animation: spin 1s ease-in-out infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
     `;
 
     document.head.appendChild(styleElement);
   }
 
   /**
-   * Fetch availability data from the API
+   * Fetch widget data from the AvailNow API
    * @param {string} userId - User ID to fetch availability for
-   * @param {number} days - Number of days to show
-   * @returns {Promise<Array>} - Promise resolving to availability data
+   * @returns {Promise<Object>} - Promise resolving to widget data
    */
-  function fetchAvailability(userId, days) {
-    // In production, this would be a real API call
-    // For demonstration, we'll use mock data with a delay
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(generateMockAvailability(days));
-      }, 800);
+  async function fetchWidgetData(userId) {
+    try {
+      // In a real production environment, this would be a fetch call to the API
+      // For now, we'll simulate an API call with a delay to mimic network latency
+
+      // Create the URL with query params
+      const url = `${WIDGET_DATA_ENDPOINT}?userId=${encodeURIComponent(userId)}`;
+
+      // Make the API request
+      const response = await fetch(url);
+
+      // If the response isn't successful, throw an error
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      // Parse and return the JSON data
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching widget data:", error);
+
+      // If the API isn't available, return a fallback empty data structure
+      // This allows the widget to display a placeholder state
+      return {
+        settings: defaultSettings,
+        profile: null,
+        availability: [],
+        hasCalendarIntegration: false,
+        stats: {
+          views: 0,
+          clicks: 0,
+          bookings: 0,
+        },
+      };
+    }
+  }
+
+  /**
+   * Track widget event (view, click, booking)
+   * @param {string} userId - User ID
+   * @param {string} eventType - Type of event (view, click, booking)
+   */
+  async function trackEvent(userId, eventType) {
+    try {
+      // In a production environment, this would be a real API call
+      await fetch(WIDGET_TRACK_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId,
+          eventType,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+    } catch (error) {
+      // Silently fail for analytics events
+      console.warn("Failed to track widget event:", error);
+    }
+  }
+
+  /**
+   * Format date for display
+   * @param {Date} date - Date object
+   * @returns {string} - Formatted date string
+   */
+  function formatDateString(date) {
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
     });
   }
 
   /**
-   * Generate mock availability data
-   * @param {number} days - Number of days to generate data for
-   * @returns {Array} - Array of day objects with availability slots
+   * Check if a date is today
+   * @param {Date} date - Date to check
+   * @returns {boolean} - True if date is today
    */
-  function generateMockAvailability(days) {
-    const result = [];
+  function isToday(date) {
     const today = new Date();
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  }
 
+  /**
+   * Process availability data into a calendar format
+   * @param {Array} availabilitySlots - Raw availability slots
+   * @param {number} days - Number of days to show
+   * @returns {Array} - Processed daily availability
+   */
+  function processAvailability(availabilitySlots, days = 7) {
+    const result = [];
+    const now = new Date();
+    const processedDates = {};
+
+    // Initialize a map of dates to process
     for (let i = 0; i < days; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+      const date = new Date(now);
+      date.setDate(now.getDate() + i);
+      date.setHours(0, 0, 0, 0);
 
-      // Skip weekends in the mock data
-      if (date.getDay() === 0 || date.getDay() === 6) {
-        continue;
-      }
-
-      const slots = [];
-      // Generate 2-3 random slots per day
-      const numSlots = Math.floor(Math.random() * 2) + 2;
-
-      for (let j = 0; j < numSlots; j++) {
-        // Random time between 9am and 5pm
-        const hour = 9 + Math.floor(Math.random() * 8);
-        slots.push({
-          id: `slot-${i}-${j}`,
-          time: `${hour}:00 ${hour >= 12 ? "PM" : "AM"}`,
-          available: Math.random() > 0.3, // 70% chance of being available
-        });
-      }
-
-      result.push({
+      const dateString = date.toISOString().split("T")[0];
+      processedDates[dateString] = {
         date,
-        dateString: date.toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        }),
-        slots: slots.sort((a, b) => {
-          // Sort by hour
-          const hourA = parseInt(a.time.split(":")[0]);
-          const hourB = parseInt(b.time.split(":")[0]);
-          return hourA - hourB;
-        }),
+        dateString: formatDateString(date),
+        slots: [],
+        hasAvailability: false,
+      };
+    }
+
+    // Process each availability slot
+    if (availabilitySlots && availabilitySlots.length > 0) {
+      availabilitySlots.forEach((slot) => {
+        if (!slot.available) return; // Skip unavailable slots
+
+        const startTime = new Date(slot.start_time);
+        const endTime = new Date(slot.end_time);
+
+        // Get just the date part for matching
+        const dateString = startTime.toISOString().split("T")[0];
+
+        // Only process if date is in our range
+        if (processedDates[dateString]) {
+          // Format time for display
+          const hour = startTime.getHours();
+          const minutes = startTime.getMinutes();
+          const ampm = hour >= 12 ? "PM" : "AM";
+          const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+          const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+
+          // Add to slots for this date
+          processedDates[dateString].slots.push({
+            id: slot.id,
+            time: `${displayHour}:${displayMinutes} ${ampm}`,
+            available: true,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+          });
+
+          // Mark this date as having availability
+          processedDates[dateString].hasAvailability = true;
+        }
       });
     }
+
+    // Convert to array and sort slots by time
+    Object.values(processedDates).forEach((day) => {
+      day.slots.sort((a, b) => {
+        return new Date(a.startTime) - new Date(b.startTime);
+      });
+      result.push(day);
+    });
 
     return result;
   }
@@ -167,35 +284,55 @@
   /**
    * Render the widget with availability data
    * @param {HTMLElement} container - The container element to render the widget in
-   * @param {Array} availabilityData - Availability data to render
+   * @param {Object} widgetData - Widget data from API
    * @param {Object} settings - Widget settings
    */
-  function renderWidget(container, availabilityData, settings) {
+  function renderWidget(container, widgetData, settings) {
+    // Extract data from API response
+    const {
+      availability = [],
+      profile = null,
+      hasCalendarIntegration = false,
+    } = widgetData;
+
+    // Merge settings from API with passed settings
+    const mergedSettings = Object.assign(
+      {},
+      settings,
+      widgetData.settings || {}
+    );
+
+    // Process availability data
+    const availabilityData = processAvailability(
+      availability,
+      mergedSettings.showDays
+    );
+
     // Create widget elements
     const widget = document.createElement("div");
     widget.className = "availnow-widget";
     widget.style.fontFamily = "'Inter', system-ui, sans-serif";
     widget.style.backgroundColor =
-      settings.theme === "light" ? "#ffffff" : "#1f2937";
+      mergedSettings.theme === "light" ? "#ffffff" : "#1f2937";
     widget.style.color =
-      settings.theme === "light" ? settings.textColor : "#f3f4f6";
+      mergedSettings.theme === "light" ? mergedSettings.textColor : "#f3f4f6";
     widget.style.borderRadius = "8px";
     widget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-    widget.style.border = `1px solid ${settings.theme === "light" ? "#e5e7eb" : "#374151"}`;
+    widget.style.border = `1px solid ${mergedSettings.theme === "light" ? "#e5e7eb" : "#374151"}`;
     widget.style.overflow = "hidden";
-    widget.style.maxWidth = settings.compact ? "320px" : "400px";
+    widget.style.maxWidth = mergedSettings.compact ? "320px" : "400px";
     widget.style.margin = "0 auto";
 
     // Widget header
     const header = document.createElement("div");
     header.className = "availnow-widget-header";
-    header.style.backgroundColor = settings.accentColor;
+    header.style.backgroundColor = mergedSettings.accentColor;
     header.style.color = "#ffffff";
-    header.style.padding = settings.compact ? "10px 16px" : "16px 20px";
+    header.style.padding = mergedSettings.compact ? "10px 16px" : "16px 20px";
     header.style.display = "flex";
     header.style.alignItems = "center";
     header.style.justifyContent = "space-between";
-    header.style.borderBottom = `1px solid ${settings.theme === "light" ? "#e5e7eb" : "#374151"}`;
+    header.style.borderBottom = `1px solid ${mergedSettings.theme === "light" ? "#e5e7eb" : "#374151"}`;
 
     const headerTitle = document.createElement("div");
     headerTitle.style.display = "flex";
@@ -207,9 +344,9 @@
     headerIcon.style.marginRight = "8px";
 
     const headerText = document.createElement("h3");
-    headerText.textContent = settings.buttonText;
+    headerText.textContent = mergedSettings.buttonText;
     headerText.style.margin = "0";
-    headerText.style.fontSize = settings.compact ? "16px" : "18px";
+    headerText.style.fontSize = mergedSettings.compact ? "16px" : "18px";
     headerText.style.fontWeight = "bold";
 
     headerTitle.appendChild(headerIcon);
@@ -232,7 +369,7 @@
     // Widget content
     const content = document.createElement("div");
     content.className = "availnow-widget-content";
-    content.style.padding = settings.compact ? "12px" : "20px";
+    content.style.padding = mergedSettings.compact ? "12px" : "20px";
     content.style.maxHeight = "0";
     content.style.overflow = "hidden";
     content.style.transition = "max-height 0.3s ease-in-out";
@@ -241,83 +378,136 @@
     const footer = document.createElement("div");
     footer.style.padding = "12px";
     footer.style.textAlign = "center";
-    footer.style.borderTop = `1px solid ${settings.theme === "light" ? "#e5e7eb" : "#374151"}`;
+    footer.style.borderTop = `1px solid ${mergedSettings.theme === "light" ? "#e5e7eb" : "#374151"}`;
     footer.style.fontSize = "12px";
-    footer.style.color = settings.theme === "light" ? "#6b7280" : "#9ca3af";
+    footer.style.color =
+      mergedSettings.theme === "light" ? "#6b7280" : "#9ca3af";
     footer.innerHTML =
       'Powered by <a href="https://availnow.com" target="_blank" rel="noopener noreferrer" style="color: ' +
-      settings.accentColor +
+      mergedSettings.accentColor +
       '; text-decoration: none;">AvailNow</a>';
 
     // Populate content with availability data
-    if (availabilityData.length === 0) {
+    if (
+      availabilityData.length === 0 ||
+      !availabilityData.some((day) => day.hasAvailability)
+    ) {
       content.innerHTML =
         '<div style="text-align: center; padding: 20px;">No availability found</div>';
     } else {
+      // Provider info section if profile exists
+      if (profile) {
+        const providerSection = document.createElement("div");
+        providerSection.style.marginBottom = "16px";
+        providerSection.style.display = "flex";
+        providerSection.style.alignItems = "center";
+
+        // Profile image if available
+        if (profile.avatar_url) {
+          const avatar = document.createElement("img");
+          avatar.src = profile.avatar_url;
+          avatar.alt = profile.display_name || "Provider";
+          avatar.style.width = "40px";
+          avatar.style.height = "40px";
+          avatar.style.borderRadius = "50%";
+          avatar.style.marginRight = "12px";
+          avatar.style.objectFit = "cover";
+          providerSection.appendChild(avatar);
+        }
+
+        // Provider info text
+        const providerInfo = document.createElement("div");
+
+        // Display name
+        if (profile.display_name) {
+          const name = document.createElement("div");
+          name.textContent = profile.display_name;
+          name.style.fontWeight = "600";
+          providerInfo.appendChild(name);
+        }
+
+        // Location if available
+        if (profile.address) {
+          const address = document.createElement("div");
+          address.textContent = profile.address;
+          address.style.fontSize = "12px";
+          address.style.color =
+            mergedSettings.theme === "light" ? "#6b7280" : "#9ca3af";
+          providerInfo.appendChild(address);
+        }
+
+        providerSection.appendChild(providerInfo);
+        content.appendChild(providerSection);
+      }
+
+      // Track this view
+      trackEvent(settings.userId, "view");
+
+      // Add each day's availability
       availabilityData.forEach((day) => {
         const dayElement = document.createElement("div");
         dayElement.style.padding = "8px 12px";
         dayElement.style.marginBottom = "8px";
         dayElement.style.borderRadius = "6px";
         dayElement.style.backgroundColor =
-          settings.theme === "light" ? "#f9fafb" : "#374151";
-        dayElement.style.border = `1px solid ${settings.theme === "light" ? "#e5e7eb" : "#4b5563"}`;
+          mergedSettings.theme === "light" ? "#f9fafb" : "#374151";
+        dayElement.style.border = `1px solid ${mergedSettings.theme === "light" ? "#e5e7eb" : "#4b5563"}`;
+
+        // Add "Today" indicator if applicable
+        let dateDisplay = day.dateString;
+        if (isToday(day.date)) {
+          dateDisplay += " (Today)";
+        }
 
         const dayTitle = document.createElement("div");
-        dayTitle.textContent = day.dateString;
+        dayTitle.textContent = dateDisplay;
         dayTitle.style.fontWeight = "bold";
         dayTitle.style.marginBottom = "6px";
 
         dayElement.appendChild(dayTitle);
 
-        day.slots.forEach((slot) => {
-          const slotElement = document.createElement("div");
-          slotElement.style.display = "flex";
-          slotElement.style.alignItems = "center";
-          slotElement.style.justifyContent = "space-between";
-          slotElement.style.padding = "6px 12px";
-          slotElement.style.margin = "6px 0";
-          slotElement.style.borderRadius = "4px";
-          slotElement.style.backgroundColor =
-            settings.theme === "light" ? "#ffffff" : "#1f2937";
-          slotElement.style.border = `1px solid ${settings.theme === "light" ? "#e5e7eb" : "#4b5563"}`;
+        // Check if this date has available slots
+        if (day.hasAvailability && day.slots.length > 0) {
+          day.slots.forEach((slot) => {
+            const slotElement = document.createElement("div");
+            slotElement.style.display = "flex";
+            slotElement.style.alignItems = "center";
+            slotElement.style.justifyContent = "space-between";
+            slotElement.style.padding = "6px 12px";
+            slotElement.style.margin = "6px 0";
+            slotElement.style.borderRadius = "4px";
+            slotElement.style.backgroundColor =
+              mergedSettings.theme === "light" ? "#ffffff" : "#1f2937";
+            slotElement.style.border = `1px solid ${mergedSettings.theme === "light" ? "#e5e7eb" : "#4b5563"}`;
 
-          const slotInfo = document.createElement("div");
-          slotInfo.style.display = "flex";
-          slotInfo.style.alignItems = "center";
+            const slotInfo = document.createElement("div");
+            slotInfo.style.display = "flex";
+            slotInfo.style.alignItems = "center";
 
-          const slotTime = document.createElement("span");
-          slotTime.textContent = slot.time;
-          slotTime.style.marginRight = "8px";
+            const slotTime = document.createElement("span");
+            slotTime.textContent = slot.time;
+            slotTime.style.marginRight = "8px";
 
-          const slotStatus = document.createElement("span");
-          slotStatus.textContent = slot.available ? "Available" : "Unavailable";
-          slotStatus.style.display = "inline-block";
-          slotStatus.style.padding = "2px 8px";
-          slotStatus.style.fontSize = "12px";
-          slotStatus.style.borderRadius = "12px";
-
-          if (slot.available) {
+            const slotStatus = document.createElement("span");
+            slotStatus.textContent = "Available";
+            slotStatus.style.display = "inline-block";
+            slotStatus.style.padding = "2px 8px";
+            slotStatus.style.fontSize = "12px";
+            slotStatus.style.borderRadius = "12px";
             slotStatus.style.backgroundColor =
-              settings.theme === "light" ? "#dcfce7" : "#065f46";
+              mergedSettings.theme === "light" ? "#dcfce7" : "#065f46";
             slotStatus.style.color =
-              settings.theme === "light" ? "#166534" : "#a7f3d0";
-          } else {
-            slotStatus.style.backgroundColor =
-              settings.theme === "light" ? "#fee2e2" : "#7f1d1d";
-            slotStatus.style.color =
-              settings.theme === "light" ? "#b91c1c" : "#fecaca";
-          }
+              mergedSettings.theme === "light" ? "#166534" : "#a7f3d0";
 
-          slotInfo.appendChild(slotTime);
-          slotInfo.appendChild(slotStatus);
+            slotInfo.appendChild(slotTime);
+            slotInfo.appendChild(slotStatus);
 
-          slotElement.appendChild(slotInfo);
+            slotElement.appendChild(slotInfo);
 
-          if (slot.available) {
+            // Add book button
             const bookButton = document.createElement("button");
             bookButton.textContent = "Book";
-            bookButton.style.backgroundColor = settings.accentColor;
+            bookButton.style.backgroundColor = mergedSettings.accentColor;
             bookButton.style.color = "#ffffff";
             bookButton.style.border = "none";
             bookButton.style.borderRadius = "4px";
@@ -327,17 +517,27 @@
             bookButton.style.transition = "background-color 0.2s";
 
             bookButton.addEventListener("click", () => {
-              window.open(
-                `https://booking.availnow.com/${settings.userId}?date=${day.dateString}&time=${slot.time}`,
-                "_blank"
-              );
+              // Track click event
+              trackEvent(settings.userId, "booking");
+
+              // Open booking page
+              const bookingUrl = `https://booking.availnow.com/${settings.userId}?slot=${slot.id}&date=${day.date.toISOString().split("T")[0]}&time=${encodeURIComponent(slot.time)}`;
+              window.open(bookingUrl, "_blank");
             });
 
             slotElement.appendChild(bookButton);
-          }
-
-          dayElement.appendChild(slotElement);
-        });
+            dayElement.appendChild(slotElement);
+          });
+        } else {
+          // No availability
+          const noAvailability = document.createElement("div");
+          noAvailability.style.padding = "8px";
+          noAvailability.style.textAlign = "center";
+          noAvailability.style.color =
+            mergedSettings.theme === "light" ? "#6b7280" : "#9ca3af";
+          noAvailability.textContent = "No availability on this day";
+          dayElement.appendChild(noAvailability);
+        }
 
         content.appendChild(dayElement);
       });
@@ -361,9 +561,12 @@
         toggleButton.setAttribute("aria-label", "Expand availability");
       } else {
         widget.classList.add("availnow-widget-expanded");
-        content.style.maxHeight = settings.compact ? "300px" : "400px";
+        content.style.maxHeight = mergedSettings.compact ? "300px" : "400px";
         toggleButton.innerHTML = "▲";
         toggleButton.setAttribute("aria-label", "Collapse availability");
+
+        // Track click event
+        trackEvent(settings.userId, "click");
       }
     });
   }
