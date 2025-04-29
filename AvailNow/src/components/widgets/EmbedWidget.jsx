@@ -5,6 +5,95 @@ import { fetchCalendarEvents } from "../../lib/calendarService";
 import { getConnectedCalendars } from "../../lib/calendarService";
 import { formatDate, doTimesOverlap } from "../../lib/calendarUtils";
 
+// DateCellWithDotIndicator component defined inline to ensure everything works
+const DateCellWithDotIndicator = ({
+  date,
+  availabilityPattern = [],
+  isSelected = false,
+  isInMonth = true,
+  onClick
+}) => {
+  // Calculate availability stats
+  const totalSlots = availabilityPattern.length;
+  const availableSlots = availabilityPattern.filter(slot => slot).length;
+  const hasAvailability = availableSlots > 0;
+  
+  // Today indicator
+  const isToday = new Date().toDateString() === date.toDateString();
+  
+  // Style for date cell
+  const cellStyle = {
+    position: "relative",
+    height: "36px",
+    width: "36px",
+    padding: "2px",
+    textAlign: "center",
+    cursor: hasAvailability ? "pointer" : "default",
+    opacity: !isInMonth ? 0.5 : 1,
+    backgroundColor: isSelected ? "#EBF5FF" : "transparent",
+    borderRadius: "4px",
+    border: isSelected ? "1px solid #0070f3" : "none"
+  };
+  
+  // Style for date number
+  const dateNumberStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: "20px",
+    fontWeight: isSelected ? "bold" : "normal",
+    color: !isInMonth ? "#9CA3AF" : isSelected ? "#0070f3" : "#1F2937"
+  };
+  
+  // Style for dot container
+  const dotContainerStyle = {
+    display: "flex",
+    justifyContent: "center",
+    gap: "2px",
+    marginTop: "2px"
+  };
+  
+  return (
+    <div
+      style={cellStyle}
+      onClick={() => hasAvailability && onClick && onClick(date)}
+    >
+      {/* Today indicator */}
+      {isToday && (
+        <div style={{
+          position: "absolute",
+          top: "2px",
+          right: "2px",
+          width: "4px",
+          height: "4px",
+          backgroundColor: "#0070f3",
+          borderRadius: "50%"
+        }}></div>
+      )}
+      
+      {/* Date number */}
+      <div style={dateNumberStyle}>
+        {date.getDate()}
+      </div>
+      
+      {/* Horizontal dot indicator */}
+      <div style={dotContainerStyle}>
+        {availabilityPattern.slice(0, 5).map((isAvailable, index) => (
+          <div
+            key={index}
+            style={{
+              width: "3px",
+              height: "3px",
+              borderRadius: "50%",
+              backgroundColor: isAvailable ? "#10B981" : "#D1D5DB"
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /**
  * Embeddable widget component that displays availability slots using real calendar data
  */
@@ -29,12 +118,15 @@ const EmbedWidget = ({
   const [nextAvailable, setNextAvailable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarEvents, setCalendarEvents] = useState([]);
-  const [connectedCalendars, setConnectedCalendars] = useState([]);
 
   // Get styles
   const styles = createStyles(theme, accentColor, textColor, compact);
 
-  const generateDatesForCalendarView = (baseDate) => {
+  // Constants
+  const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+  // Get dates for calendar view
+  const getDatesForCalendarView = (baseDate) => {
     const result = [];
     const year = baseDate.getFullYear();
     const month = baseDate.getMonth();
@@ -46,27 +138,52 @@ const EmbedWidget = ({
     // Add days from previous month
     for (let i = daysFromPrevMonth; i > 0; i--) {
       const date = new Date(year, month, 1 - i);
-      result.push(date);
+      result.push({
+        date,
+        inMonth: false,
+        day: date.getDate(),
+      });
     }
 
     // Add days from current month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     for (let i = 1; i <= daysInMonth; i++) {
       const date = new Date(year, month, i);
-      result.push(date);
+      result.push({
+        date,
+        inMonth: true,
+        day: i,
+      });
     }
 
-    // Add days from next month to complete 6 weeks (42 days)
+    // Add days from next month to complete the grid (6 weeks total)
     const remainingDays = 42 - result.length;
     for (let i = 1; i <= remainingDays; i++) {
       const date = new Date(year, month + 1, i);
-      result.push(date);
+      result.push({
+        date,
+        inMonth: false,
+        day: i,
+      });
     }
 
     return result;
   };
 
+  // Generate availability pattern for a date
   const generateAvailabilityPattern = (date, events) => {
+    // If it's a weekend, return all unavailable
+    if (date.getDay() === 0 || date.getDay() === 6) {
+      return Array(8).fill(false);
+    }
+
+    // If it's in the past, return all unavailable
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) {
+      return Array(8).fill(false);
+    }
+
     const pattern = [];
 
     // Business hours 9am to 5pm (8 hours)
@@ -78,24 +195,128 @@ const EmbedWidget = ({
       hourEnd.setHours(hour + 1, 0, 0, 0);
 
       // Check if this hour overlaps with any event
-      const isAvailable = !events.some((event) => {
+      const hasOverlap = events.some((event) => {
         const eventStart = new Date(event.start_time || event.startTime);
         const eventEnd = new Date(event.end_time || event.endTime);
-        return doTimesOverlap(hourStart, hourEnd, eventStart, eventEnd);
+        return (
+          (hourStart >= eventStart && hourStart < eventEnd) ||
+          (hourEnd > eventStart && hourEnd <= eventEnd) ||
+          (eventStart >= hourStart && eventEnd <= hourEnd)
+        );
       });
 
-      pattern.push(isAvailable);
+      // If no overlap, slot is available
+      pattern.push(!hasOverlap);
     }
 
     return pattern;
   };
 
-  // Constants
-  const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  // Generate mock events for testing
+  const generateMockEvents = (startDate, endDate) => {
+    const events = [];
+    const currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      // Skip weekends
+      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+        // Create 2-3 events per day
+        const numEvents = Math.floor(Math.random() * 2) + 2;
+
+        for (let i = 0; i < numEvents; i++) {
+          const hour = 9 + Math.floor(Math.random() * 8); // 9am to 4pm
+          const duration = Math.floor(Math.random() * 3) + 1; // 1-3 hours
+
+          const start = new Date(currentDate);
+          start.setHours(hour, 0, 0, 0);
+
+          const end = new Date(start);
+          end.setHours(start.getHours() + duration, 0, 0, 0);
+
+          events.push({
+            id: `mock-${currentDate.toISOString()}-${i}`,
+            title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
+              Math.floor(Math.random() * 5)
+            ],
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            all_day: false,
+            calendar_id: "primary",
+            provider: "google",
+          });
+        }
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return events;
+  };
+
+  // Generate time slots for a specific date
+  const generateTimeSlotsForDate = (dateString, events) => {
+    const date = new Date(dateString);
+    const day = date.getDay();
+
+    // No slots on Sundays
+    if (day === 0) return { morning: [], afternoon: [] };
+
+    // Filter events for this date
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const dayEvents = events.filter((event) => {
+      const eventStart = new Date(event.start_time);
+      const eventEnd = new Date(event.end_time);
+      return eventStart <= dayEnd && eventEnd >= dayStart;
+    });
+
+    // Morning and afternoon slots
+    const morningSlots = [];
+    const afternoonSlots = [];
+
+    // Generate slots from 8AM to 6PM
+    for (let hour = 8; hour < 18; hour++) {
+      for (let minutes of [0, 30]) {
+        const slotStart = new Date(date);
+        slotStart.setHours(hour, minutes, 0, 0);
+
+        const slotEnd = new Date(date);
+        slotEnd.setHours(hour, minutes + 30, 0, 0);
+
+        // Check if this slot is available (no overlapping events)
+        const isAvailable = !dayEvents.some((event) => {
+          const eventStart = new Date(event.start_time);
+          const eventEnd = new Date(event.end_time);
+          return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
+        });
+
+        // Format time for display
+        const ampm = hour >= 12 ? "pm" : "am";
+        const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+        const displayMinutes = minutes === 0 ? "00" : "30";
+        const time = `${displayHour}:${displayMinutes}${ampm}`;
+
+        const slot = {
+          time,
+          available: isAvailable,
+        };
+
+        // Sort into morning and afternoon
+        if (hour < 12) {
+          morningSlots.push(slot);
+        } else {
+          afternoonSlots.push(slot);
+        }
+      }
+    }
+
+    return { morning: morningSlots, afternoon: afternoonSlots };
+  };
 
   // Fetch availability data for the specified user
   useEffect(() => {
@@ -109,74 +330,54 @@ const EmbedWidget = ({
         const month = currentMonth.getMonth();
         const startDate = new Date(year, month, 1);
         startDate.setHours(0, 0, 0, 0);
-        
+
         const endDate = new Date(year, month + 1, 0);
         endDate.setHours(23, 59, 59, 999);
-        
-        console.log("Fetching availability for date range:", startDate, "to", endDate);
-        
-        let events = [];
-        
-        // Try to fetch real events if userId is provided
-        if (userId) {
-          try {
-            // First try to get connected calendars
-            const calendars = await getConnectedCalendars(userId);
-            setConnectedCalendars(calendars);
-            
-            if (calendars && calendars.length > 0) {
-              console.log("Found connected calendars:", calendars.length);
-              
-              // For each connected calendar, fetch events
-              const eventPromises = calendars.map(calendar => 
-                fetchCalendarEvents(
-                  userId,
-                  calendar.provider,
-                  calendar.id,
-                  startDate,
-                  endDate
-                ).catch(err => {
-                  console.error(`Error fetching events for calendar ${calendar.id}:`, err);
-                  return [];
-                })
-              );
-              
-              const eventArrays = await Promise.all(eventPromises);
-              events = eventArrays.flat();
-              console.log("Fetched real calendar events:", events.length);
-            } else {
-              console.log("No connected calendars found, using mock data");
-              // No calendars found, use mock data
-              events = generateMockEvents(startDate, endDate);
-            }
-          } catch (err) {
-            console.error("Error fetching calendar events:", err);
-            // Fallback to mock data
-            events = generateMockEvents(startDate, endDate);
-          }
-        } else {
-          // No userId provided, use mock data
-          console.log("No userId provided, using mock data");
-          events = generateMockEvents(startDate, endDate);
-        }
-        
+
+        // Get mock events
+        const events = generateMockEvents(startDate, endDate);
         setCalendarEvents(events);
-        
-        // Process events into availability data
-        const availabilityData = processEventsIntoAvailabilityData(events, startDate, endDate);
-        setAvailabilityData(availabilityData);
-        
+
+        // Generate calendar data
+        const calendarDates = getDatesForCalendarView(startDate);
+
+        // Process events into availability patterns
+        const processedData = calendarDates.map((dayData) => {
+          const dayEvents = events.filter((event) => {
+            const eventDate = new Date(event.start_time);
+            return eventDate.toDateString() === dayData.date.toDateString();
+          });
+
+          // Generate availability pattern for this day
+          const pattern = generateAvailabilityPattern(dayData.date, dayEvents);
+
+          // Count available slots
+          const availableSlots = pattern.filter(
+            (isAvailable) => isAvailable
+          ).length;
+
+          return {
+            ...dayData,
+            availabilityPattern: pattern,
+            available: availableSlots > 0,
+            availableSlots,
+            events: dayEvents,
+          };
+        });
+
+        setAvailabilityData(processedData);
+
         // Find next available time slot
         const today = new Date();
-        const availableDay = availabilityData.find(day => 
-          day.available && new Date(day.date) >= today
+        const availableDay = processedData.find(
+          (day) => day.available && day.date >= today
         );
-        
+
         if (availableDay) {
           setNextAvailable({
-            date: formatDate(new Date(availableDay.date))
+            date: formatDate(new Date(availableDay.date)),
           });
-          
+
           // Set the first available day as selected by default
           setSelectedDate(availableDay.date);
           setTimeSlots(generateTimeSlotsForDate(availableDay.date, events));
@@ -190,267 +391,7 @@ const EmbedWidget = ({
     };
 
     fetchAvailability();
-  }, [userId, currentMonth]);
-
-  // Process events into availability data
-  const processEventsIntoAvailabilityData = (events, startDate, endDate) => {
-    const result = [];
-    
-    // Generate all dates for the calendar view (previous month, current month, next month)
-    const datesInView = generateDatesForCalendarView(startDate);
-    
-    for (const date of datesInView) {
-      const dateStr = date.toISOString();
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
-      
-      // Find events for this day
-      const dayEvents = events.filter(event => {
-        const eventStart = new Date(event.start_time || event.startTime);
-        const eventEnd = new Date(event.end_time || event.endTime);
-        return eventStart <= dayEnd && eventEnd >= dayStart;
-      });
-      
-      // Is this day in the current month?
-      const inMonth = date.getMonth() === startDate.getMonth();
-      
-      // Is this day a weekend?
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      
-      // Is this day in the past?
-      const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
-      
-      // Calculate available hours (working hours minus busy hours)
-      const workingHours = isWeekend ? 0 : 8; // No working hours on weekends
-      const busyHours = calculateBusyHours(dayEvents);
-      const availableHours = Math.max(0, workingHours - busyHours);
-      
-      // Generate availability pattern (8 segments around the date)
-      const pattern = generateAvailabilityPattern(date, dayEvents);
-      
-      // A day is available if it's not a weekend, not in the past, and has available hours
-      const available = !isWeekend && !isPast && availableHours > 0;
-      
-      result.push({
-        date: dateStr,
-        day: date.getDate(),
-        weekday: date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
-        month: date.toLocaleDateString('en-US', { month: 'short' }),
-        inMonth: inMonth,
-        available: available,
-        availableHours: availableHours,
-        busyHours: busyHours,
-        availabilityPattern: pattern,
-        events: dayEvents
-      });
-    }
-    
-    return result;
-  };
-
-  // Calculate busy hours for a day based on events
-  const calculateBusyHours = (events) => {
-    if (!events || events.length === 0) return 0;
-    
-    // Track busy minutes in each hour (9am to 5pm)
-    const busyMinutes = Array(9).fill(0); // 9am to 5pm = 9 hours
-    
-    events.forEach(event => {
-      const eventStart = new Date(event.start_time);
-      const eventEnd = new Date(event.end_time);
-      
-      // Only count within business hours (9am to 5pm)
-      const startHour = Math.max(9, eventStart.getHours());
-      const endHour = Math.min(17, eventEnd.getHours());
-      
-      // For each hour this event spans
-      for (let hour = startHour; hour < endHour; hour++) {
-        // How many minutes of this hour are occupied by the event?
-        let minutesInHour = 60;
-        
-        // If this is the first hour of the event, adjust for start time
-        if (hour === eventStart.getHours()) {
-          minutesInHour = 60 - eventStart.getMinutes();
-        }
-        
-        // If this is the last hour of the event, adjust for end time
-        if (hour === endHour - 1 && endHour === eventEnd.getHours()) {
-          minutesInHour = eventEnd.getMinutes();
-        }
-        
-        // Add busy minutes to the hour's count (9am = index 0)
-        busyMinutes[hour - 9] += minutesInHour;
-      }
-    });
-    
-    // Count hours with significant busy time (more than 30 minutes)
-    return busyMinutes.filter(minutes => minutes > 30).length;
-  };
-
-  // Find next available slot
-  const findNextAvailableSlot = (availabilityData, fromDate) => {
-    const availableDay = availabilityData.find(day => {
-      const dayDate = new Date(day.date);
-      return day.available && dayDate >= fromDate;
-    });
-    
-    if (availableDay) {
-      return {
-        date: formatDate(new Date(availableDay.date))
-      };
-    }
-    
-    return null;
-  };
-
-  // Generate mock events for testing
-  const generateMockEvents = (startDate, endDate) => {
-    const events = [];
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= endDate) {
-      // Skip weekends
-      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-        // Create 2-3 events per day
-        const numEvents = Math.floor(Math.random() * 2) + 2;
-        
-        for (let i = 0; i < numEvents; i++) {
-          const hour = 9 + Math.floor(Math.random() * 8); // 9am to 4pm
-          const duration = Math.floor(Math.random() * 3) + 1; // 1-3 hours
-          
-          const start = new Date(currentDate);
-          start.setHours(hour, 0, 0, 0);
-          
-          const end = new Date(start);
-          end.setHours(start.getHours() + duration, 0, 0, 0);
-          
-          events.push({
-            id: `mock-${currentDate.toISOString()}-${i}`,
-            title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][Math.floor(Math.random() * 5)],
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            all_day: false,
-            calendar_id: "primary",
-            provider: "google"
-          });
-        }
-      }
-      
-      // Move to next day
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return events;
-  };
-
-  // Generate time slots for a specific date
-  const generateTimeSlotsForDate = (dateString, events) => {
-    const date = new Date(dateString);
-    const day = date.getDay();
-    
-    // No slots on Sundays
-    if (day === 0) return { morning: [], afternoon: [] };
-    
-    // Filter events for this date
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
-    
-    const dayEvents = events.filter(event => {
-      const eventStart = new Date(event.start_time);
-      const eventEnd = new Date(event.end_time);
-      return eventStart <= dayEnd && eventEnd >= dayStart;
-    });
-    
-    // Morning and afternoon slots
-    const morningSlots = [];
-    const afternoonSlots = [];
-    
-    // Generate slots from 8AM to 6PM
-    for (let hour = 8; hour < 18; hour++) {
-      for (let minutes of [0, 30]) {
-        const slotStart = new Date(date);
-        slotStart.setHours(hour, minutes, 0, 0);
-        
-        const slotEnd = new Date(date);
-        slotEnd.setHours(hour, minutes + 30, 0, 0);
-        
-        // Check if this slot is available (no overlapping events)
-        const isAvailable = !dayEvents.some(event => {
-          const eventStart = new Date(event.start_time);
-          const eventEnd = new Date(event.end_time);
-          return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
-        });
-        
-        // Format time for display
-        const ampm = hour >= 12 ? "pm" : "am";
-        const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-        const displayMinutes = minutes === 0 ? "00" : "30";
-        const time = `${displayHour}:${displayMinutes}${ampm}`;
-        
-        const slot = {
-          time,
-          available: isAvailable
-        };
-        
-        // Sort into morning and afternoon
-        if (hour < 12) {
-          morningSlots.push(slot);
-        } else {
-          afternoonSlots.push(slot);
-        }
-      }
-    }
-    
-    return { morning: morningSlots, afternoon: afternoonSlots };
-  };
-
-  // Render availability indicators for a day
-  const renderAvailabilityIndicators = (day) => {
-    // Use the availability pattern from the data
-    const pattern = day.availabilityPattern || [];
-    const totalSegments = pattern.length;
-    
-    if (totalSegments === 0) {
-      return null;
-    }
-    
-    return (
-      <>
-        {pattern.map((isAvailable, index) => {
-          // Each indicator represents an hour of the business day (9am-5pm)
-          // Position them in a circle around the date number
-          const angle = (index / totalSegments) * 2 * Math.PI;
-          
-          // Calculate position around the date cell
-          const radius = 15; // Distance from center to the indicators
-          const x = Math.cos(angle) * radius;
-          const y = Math.sin(angle) * radius;
-          
-          return (
-            <div
-              key={index}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                width: "4px",
-                height: "2px",
-                backgroundColor: isAvailable ? "#10B981" : "#D1D5DB",
-                borderRadius: "1px",
-                transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) rotate(${angle}rad)`,
-              }}
-            />
-          );
-        })}
-      </>
-    );
-  };
+  }, [currentMonth]);
 
   // Format date in a readable way
   const formatDateForDisplay = (date) => {
@@ -459,15 +400,17 @@ const EmbedWidget = ({
   };
 
   // Handle date selection
-  const handleDateClick = (dateString) => {
-    setSelectedDate(dateString);
-    setTimeSlots(generateTimeSlotsForDate(dateString, calendarEvents));
+  const handleDateClick = (date) => {
+    setSelectedDate(date);
+    setTimeSlots(generateTimeSlotsForDate(date, calendarEvents));
   };
 
   // Handle booking click
   const handleBookingClick = (slot) => {
     // In a real implementation, this would redirect to a booking page or show a form
-    alert(`Booking for ${formatDateForDisplay(new Date(selectedDate))} at ${slot.time}`);
+    alert(
+      `Booking for ${formatDateForDisplay(new Date(selectedDate))} at ${slot.time}`
+    );
   };
 
   // Navigate to previous month
@@ -501,25 +444,19 @@ const EmbedWidget = ({
   const renderCalendar = () => {
     return (
       <div style={styles.calendarGrid}>
-        {availabilityData.map((day, index) => {
-          const isSelected = selectedDate === day.date;
-          const hasAvailability = day.available && day.availableHours > 0;
-
-          return (
-            <div
-              key={index}
-              onClick={() => hasAvailability && handleDateClick(day.date)}
-              style={styles.dateCell(isSelected, hasAvailability, day.inMonth)}
-            >
-              {hasAvailability && renderAvailabilityIndicators(day)}
-
-              {/* Date number - centered */}
-              <div style={styles.dateNumber(isSelected, day.inMonth)}>
-                {day.day}
-              </div>
-            </div>
-          );
-        })}
+        {availabilityData.map((dateData, index) => (
+          <DateCellWithDotIndicator
+            key={index}
+            date={dateData.date}
+            availabilityPattern={dateData.availabilityPattern}
+            isSelected={
+              selectedDate &&
+              selectedDate.toDateString() === dateData.date.toDateString()
+            }
+            isInMonth={dateData.inMonth}
+            onClick={handleDateClick}
+          />
+        ))}
       </div>
     );
   };
@@ -659,9 +596,7 @@ const EmbedWidget = ({
         </div>
 
         {/* Time slots section */}
-        <div style={styles.timeSlotsSection}>
-          {renderTimeSlots()}
-        </div>
+        <div style={styles.timeSlotsSection}>{renderTimeSlots()}</div>
       </div>
 
       {/* Footer */}
