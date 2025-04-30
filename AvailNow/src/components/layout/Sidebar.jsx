@@ -27,9 +27,6 @@ const Sidebar = () => {
 
   return (
     <div className="h-full w-64 border-r border-gray-200 p-4">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-primary">AvailNow</h2>
-      </div>
       <nav className="space-y-1">
         {navItems.map((item) => (
           <Link
