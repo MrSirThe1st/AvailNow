@@ -39,7 +39,7 @@ const Layout = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="text-center">
-          <Loader className="h-8 w-8 animate-spin text-primary mb-4 mx-auto" />
+          <Loader className="h-8 w-8 animate-spin text-[#748efe] mb-4 mx-auto" />
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -49,7 +49,7 @@ const Layout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar profile={userProfile} />
-      <main className="flex-1 p-4 md:p-6 mx-auto w-full max-w-7xl">
+      <main className="flex-1 pt-16 p-4 md:p-6 mx-auto w-full max-w-7xl">
         <Outlet context={{ user, profile: userProfile }} />
       </main>
       <Footer />
