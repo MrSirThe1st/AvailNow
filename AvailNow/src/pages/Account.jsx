@@ -111,7 +111,7 @@ const Account = () => {
   };
 
   return (
-    <div>
+    <div className="w-full">
       <h1 className="text-2xl font-bold mb-6">Account</h1>
 
       {error && (

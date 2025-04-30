@@ -105,7 +105,7 @@ const Widget = () => {
   }
 
   return (
-    <div>
+    <div className="w-full">
       <h1 className="text-2xl font-bold mb-6">Widget Configuration</h1>
 
       {error && (

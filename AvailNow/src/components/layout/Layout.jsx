@@ -1,7 +1,7 @@
+// src/components/layout/Layout.jsx
 import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
-import Header from "./Header";
-import Sidebar from "./Sidebar";
+import Navbar from "./Navbar";
 import Footer from "./Footer";
 import { useAuth } from "../../context/SupabaseAuthContext";
 import { getUserProfile } from "../../lib/supabase";
@@ -37,22 +37,21 @@ const Layout = () => {
   // Show loading spinner while authentication is in progress
   if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-gray-600">Loading...</p>
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-center">
+          <Loader className="h-8 w-8 animate-spin text-primary mb-4 mx-auto" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header profile={userProfile} />
-      <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 p-6 bg-gray-50">
-          <Outlet context={{ user, profile: userProfile }} />
-        </main>
-      </div>
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar profile={userProfile} />
+      <main className="flex-1 p-4 md:p-6 mx-auto w-full max-w-7xl">
+        <Outlet context={{ user, profile: userProfile }} />
+      </main>
       <Footer />
     </div>
   );
