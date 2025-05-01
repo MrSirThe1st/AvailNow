@@ -1,6 +1,6 @@
 // src/pages/Calendar.jsx
 import React, { useState, useEffect } from "react";
-import { Loader } from "lucide-react";
+import { Loader, AlertTriangle } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
@@ -19,6 +19,7 @@ const Calendar = () => {
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   // Store actual calendar objects with calendar info
   const [calendarsList, setCalendarsList] = useState([]);
+  const [calendarEvents, setCalendarEvents] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [businessHours, setBusinessHours] = useState({
     startTime: "09:00",
@@ -108,6 +109,16 @@ const Calendar = () => {
     }
   }, [user]);
 
+  // Fetch calendar events when connected calendars change
+  useEffect(() => {
+    if (connectedCalendars.length > 0) {
+      fetchCalendarEvents();
+    } else {
+      // If no connected calendars, generate mock events
+      generateMockEvents();
+    }
+  }, [connectedCalendars]);
+
   // Load connected calendars
   const loadConnectedCalendars = async () => {
     try {
@@ -163,6 +174,86 @@ const Calendar = () => {
     }
   };
 
+  // Fetch calendar events
+  const fetchCalendarEvents = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // In a real implementation, this would fetch real events from your calendars
+      // For now, we'll use mock data
+      const startDate = new Date();
+      startDate.setDate(1); // First day of current month
+
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(0); // Last day of current month
+
+      // In a real implementation, you would use your calendar service to fetch events
+      // const events = await fetchCalendarEvents(userId, provider, calendarId, startDate, endDate);
+
+      // For now, let's use generated mock events
+      const mockEvents = generateMockEvents(startDate, endDate);
+      setCalendarEvents(mockEvents);
+    } catch (err) {
+      console.error("Error fetching calendar events:", err);
+      setError("Failed to fetch calendar events. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate mock events for testing
+  const generateMockEvents = (start, end) => {
+    const startDate = start || new Date();
+    const endDate = end || new Date(startDate);
+
+    if (!end) {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    const events = [];
+    const currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      // Skip some days randomly
+      if (Math.random() > 0.6) {
+        // Create 1-3 events per day
+        const numEvents = Math.floor(Math.random() * 3) + 1;
+
+        for (let i = 0; i < numEvents; i++) {
+          const hour = 9 + Math.floor(Math.random() * 8); // 9am to 4pm
+          const duration = Math.floor(Math.random() * 3) + 1; // 1-3 hours
+
+          const start = new Date(currentDate);
+          start.setHours(hour, 0, 0, 0);
+
+          const end = new Date(start);
+          end.setHours(start.getHours() + duration, 0, 0, 0);
+
+          events.push({
+            id: `mock-${currentDate.toISOString()}-${i}`,
+            title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
+              Math.floor(Math.random() * 5)
+            ],
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            all_day: false,
+            calendar_id: "primary",
+            provider: "google",
+            location: Math.random() > 0.5 ? "Office" : "Virtual Meeting",
+          });
+        }
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    setCalendarEvents(events);
+    return events;
+  };
+
   // Handle adding new calendar integration
   const handleAddCalendar = async (newCalendars) => {
     try {
@@ -188,6 +279,9 @@ const Calendar = () => {
       }
 
       setShowCalendarModal(false);
+
+      // Fetch events for the new calendars
+      fetchCalendarEvents();
     } catch (err) {
       console.error("Error handling new calendar:", err);
       setError("Failed to add calendar integration.");
@@ -245,31 +339,15 @@ const Calendar = () => {
         )}
       </div>
 
-      <div className="space-y-6">
-        {/* Calendar Widget */}
-        <CalendarView
-          connectedCalendars={connectedCalendars}
-          calendarsList={calendarsList}
-          onAddCalendar={() => setShowCalendarModal(true)}
-          user={user}
-        />
-      </div>
-
-      {/* Debug Info */}
-      <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-600">
-        <strong>Debug Info:</strong>
-        <br />
-        URL Parameters: {window.location.search || "NONE"}
-        <br />
-        Provider in localStorage:{" "}
-        {localStorage.getItem("calendarAuthProvider") || "NONE"}
-        <br />
-        Connected Calendars: {connectedCalendars.length}
-        <br />
-        Calendar List: {calendarsList.length}
-        <br />
-        User ID: {user?.id || "Not loaded"}
-      </div>
+      {/* Enhanced Calendar View Component */}
+      <CalendarView
+        connectedCalendars={connectedCalendars}
+        calendarEvents={calendarEvents}
+        onAddCalendar={() => setShowCalendarModal(true)}
+        loading={isLoading}
+        error={error}
+        user={user}
+      />
 
       {/* Calendar Integration Modal */}
       {showCalendarModal && (
