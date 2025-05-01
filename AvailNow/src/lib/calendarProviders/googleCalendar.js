@@ -1,3 +1,4 @@
+// src/lib/calendarProviders/googleCalendar.js
 import { supabase } from "../supabase";
 
 // Google OAuth configuration

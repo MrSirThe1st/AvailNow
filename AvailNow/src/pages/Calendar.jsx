@@ -36,69 +36,47 @@ const Calendar = () => {
 
   // Process OAuth callback if present in URL
   useEffect(() => {
-    // Get URL parameters
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
     const provider = localStorage.getItem("calendarAuthProvider");
 
+    console.log("OAuth callback check:", {
+      hasCode: Boolean(code),
+      hasState: Boolean(state),
+      provider,
+      timestamp: new Date().toISOString(), // Log the exact time
+      fullUrl: window.location.href, // Log the full URL
+    });
     // Process callback if parameters exist and we have a user
     if (code && state && provider && user?.id && !callbackProcessing) {
+      setCallbackProcessing(true);
+
       const processOAuthCallback = async () => {
         try {
-          console.log("Processing OAuth callback on Calendar page:", {
-            code: code ? "PRESENT" : "NULL",
-            state,
-            provider,
-          });
-
           setCallbackProcessing(true);
 
-          // Process the callback
+          // Process the callback right away
+          const startTime = Date.now();
           const result = await handleCalendarCallback(
             provider,
             { code, state },
             user.id
           );
+          const endTime = Date.now();
 
-          console.log(`${provider} calendar connection successful:`, result);
+          console.log(`OAuth processing completed in ${endTime - startTime}ms`);
 
-          // Important change: Save the actual calendars that were returned
-          if (result.calendars && result.calendars.length > 0) {
-            // Store the calendar info directly
-            setCalendarsList(result.calendars);
+          // Rest of your callback handling...
 
-            // Also create a fake integration object that CalendarView can use
-            const fakeIntegration = {
-              id: `${provider}-integration`,
-              provider: provider,
-              user_id: user.id,
-              created_at: new Date().toISOString(),
-              access_token: "present", // we don't show the actual token
-              expires_at: new Date(Date.now() + 3600000).toISOString(),
-            };
-
-            setConnectedCalendars((prevCalendars) => {
-              // Check if we already have this provider in connected calendars
-              const existingProvider = prevCalendars.find(
-                (cal) => cal.provider === provider
-              );
-              if (existingProvider) {
-                return prevCalendars;
-              }
-              return [...prevCalendars, fakeIntegration];
-            });
-          }
-
-          // Clean up
-          localStorage.removeItem("calendarAuthProvider");
-
-          // Clear URL parameters without reloading
+          // IMPORTANT: Clear URL parameters immediately after starting the process
+          // This prevents accidental reuse of the code
           window.history.replaceState(
             {},
             document.title,
             window.location.pathname
           );
+          localStorage.removeItem("calendarAuthProvider");
         } catch (err) {
           console.error("Error processing OAuth callback:", err);
           setCallbackError(
@@ -109,6 +87,7 @@ const Calendar = () => {
         }
       };
 
+      // Execute immediately
       processOAuthCallback();
     }
   }, [user, location]);

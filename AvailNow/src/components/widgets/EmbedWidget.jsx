@@ -112,13 +112,13 @@ const EmbedWidget = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [availabilityData, setAvailabilityData] = useState([]);
-  const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [timeSlots, setTimeSlots] = useState({ morning: [], afternoon: [] });
   const [nextAvailable, setNextAvailable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
+  const [error, setError] = useState(null);
 
   // Get styles
   const styles = createStyles(theme, accentColor, textColor, compact);
