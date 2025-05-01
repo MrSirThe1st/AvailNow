@@ -41,41 +41,23 @@ const Calendar = () => {
     const state = params.get("state");
     const provider = localStorage.getItem("calendarAuthProvider");
 
-    console.log("OAuth callback check:", {
-      hasCode: Boolean(code),
-      hasState: Boolean(state),
-      provider,
-      timestamp: new Date().toISOString(), // Log the exact time
-      fullUrl: window.location.href, // Log the full URL
-    });
-    // Process callback if parameters exist and we have a user
+    // Only process if parameters exist, user is available, and not already processing
     if (code && state && provider && user?.id && !callbackProcessing) {
       setCallbackProcessing(true);
 
+      // Clear URL parameters IMMEDIATELY to prevent accidental reuse
+      window.history.replaceState({}, document.title, window.location.pathname);
+
       const processOAuthCallback = async () => {
         try {
-          setCallbackProcessing(true);
-
-          // Process the callback right away
-          const startTime = Date.now();
+          // Process the callback
           const result = await handleCalendarCallback(
             provider,
             { code, state },
             user.id
           );
-          const endTime = Date.now();
-
-          console.log(`OAuth processing completed in ${endTime - startTime}ms`);
 
           // Rest of your callback handling...
-
-          // IMPORTANT: Clear URL parameters immediately after starting the process
-          // This prevents accidental reuse of the code
-          window.history.replaceState(
-            {},
-            document.title,
-            window.location.pathname
-          );
           localStorage.removeItem("calendarAuthProvider");
         } catch (err) {
           console.error("Error processing OAuth callback:", err);

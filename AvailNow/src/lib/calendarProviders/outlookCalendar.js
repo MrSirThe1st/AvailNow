@@ -22,6 +22,7 @@ export const initiateOutlookAuth = () => {
   // Build Microsoft OAuth URL
   const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${OUTLOOK_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}&response_mode=query`;
 
+
   console.log("Generated Outlook Auth URL:", authUrl);
   return authUrl;
 };
@@ -89,10 +90,12 @@ export const handleOutlookCallback = async (code, state, userId) => {
  * @returns {Promise<Object>} Token response
  */
 const fetchOutlookTokens = async (code) => {
-  console.log(
-    "Fetching Outlook tokens with code:",
-    code ? "PRESENT" : "MISSING"
-  );
+  console.log("Token exchange parameters:", {
+    client_id: OUTLOOK_CLIENT_ID ? "[PRESENT]" : "[MISSING]",
+    redirect_uri: REDIRECT_URI,
+    code: code ? "[PRESENT]" : "[MISSING]",
+    code_length: code ? code.length : 0,
+  });
 
   const params = new URLSearchParams();
   params.append("client_id", OUTLOOK_CLIENT_ID);
