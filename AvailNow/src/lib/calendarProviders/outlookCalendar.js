@@ -1,70 +1,61 @@
 import { supabase } from "../supabase";
 
-// Google OAuth configuration
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
-// Update the redirect URI to use the dedicated callback route
+// Microsoft OAuth configuration
+const OUTLOOK_CLIENT_ID = import.meta.env.VITE_OUTLOOK_CLIENT_ID;
+const OUTLOOK_CLIENT_SECRET = import.meta.env.VITE_OUTLOOK_CLIENT_SECRET;
 const REDIRECT_URI =
-  import.meta.env.VITE_GOOGLE_REDIRECT_URI ||
+  import.meta.env.VITE_OUTLOOK_REDIRECT_URI ||
   `${window.location.origin}/auth/callback`;
 
 /**
- * Initiate Google OAuth flow for calendar access
+ * Initiate Microsoft OAuth flow for calendar access
  * @returns {string} Authorization URL to redirect the user to
  */
-export const initiateGoogleAuth = () => {
+export const initiateOutlookAuth = () => {
   // Generate a random state value for security
   const state = Math.random().toString(36).substring(2);
-  localStorage.setItem("google_auth_state", state);
+  localStorage.setItem("outlook_auth_state", state);
 
-  // Define OAuth scope for Google Calendar
-  const scope = encodeURIComponent(
-    "https://www.googleapis.com/auth/calendar.readonly"
-  );
+  // Define OAuth scope for Microsoft Calendar
+  const scope = encodeURIComponent("Calendars.Read User.Read offline_access");
 
-  // Build Google OAuth URL
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&access_type=offline&state=${state}&prompt=consent`;
+  // Build Microsoft OAuth URL
+  const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${OUTLOOK_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}&response_mode=query`;
 
-  console.log("Generated Google Auth URL:", authUrl);
+  console.log("Generated Outlook Auth URL:", authUrl);
   return authUrl;
 };
 
 /**
- * Handle Google OAuth callback
+ * Handle Microsoft OAuth callback
  * @param {string} code - Authorization code from OAuth redirect
  * @param {string} state - State parameter for verification
  * @param {string} userId - User ID to associate with this integration
  * @returns {Promise<Object>} Connection response with tokens and calendars
  */
-export const handleGoogleCallback = async (code, state, userId) => {
-  console.log("Handling Google callback with:", {
+export const handleOutlookCallback = async (code, state, userId) => {
+  console.log("Handling Outlook callback with:", {
     code: code ? "PRESENT" : "MISSING",
     state: state ? "PRESENT" : "MISSING",
     userId,
   });
 
   // Verify state parameter
-  const savedState = localStorage.getItem("google_auth_state");
+  const savedState = localStorage.getItem("outlook_auth_state");
   console.log("State comparison:", {
     savedState: savedState || "NULL",
     receivedState: state || "NULL",
   });
 
-  // Make state verification optional - this is less secure but helps with debugging
   if (savedState && state && savedState !== state) {
-    console.warn(
-      "State mismatch detected, but continuing anyway for debugging"
-    );
-    // Instead of throwing an error, we'll continue with the process
-    // In production, you would want to enforce this check
+    console.warn("State mismatch detected, but continuing for debugging");
   }
 
   // Clean up state
-  localStorage.removeItem("google_auth_state");
+  localStorage.removeItem("outlook_auth_state");
 
-  // Rest of the function continues as before...
   console.log("Exchanging code for tokens...");
-  const tokenResponse = await fetchGoogleTokens(code);
+  const tokenResponse = await fetchOutlookTokens(code);
   console.log("Token response received:", {
     access_token: tokenResponse.access_token ? "PRESENT" : "MISSING",
     refresh_token: tokenResponse.refresh_token ? "PRESENT" : "MISSING",
@@ -72,21 +63,21 @@ export const handleGoogleCallback = async (code, state, userId) => {
   });
 
   if (!tokenResponse.access_token) {
-    throw new Error("Failed to get access token from Google");
+    throw new Error("Failed to get access token from Microsoft");
   }
 
   // Store tokens in Supabase
   console.log("Storing tokens for user:", userId);
-  await storeGoogleTokens(userId, tokenResponse);
+  await storeOutlookTokens(userId, tokenResponse);
 
   // Fetch user's calendars
   console.log("Fetching calendars with access token...");
-  const calendars = await fetchGoogleCalendars(tokenResponse.access_token);
+  const calendars = await fetchOutlookCalendars(tokenResponse.access_token);
   console.log("Fetched calendars:", calendars.length);
 
   return {
     success: true,
-    provider: "google",
+    provider: "outlook",
     userId,
     calendars,
   };
@@ -97,34 +88,37 @@ export const handleGoogleCallback = async (code, state, userId) => {
  * @param {string} code - Authorization code from OAuth redirect
  * @returns {Promise<Object>} Token response
  */
-const fetchGoogleTokens = async (code) => {
+const fetchOutlookTokens = async (code) => {
   console.log(
-    "Fetching Google tokens with code:",
+    "Fetching Outlook tokens with code:",
     code ? "PRESENT" : "MISSING"
   );
 
   const params = new URLSearchParams();
-  params.append("client_id", GOOGLE_CLIENT_ID);
-  params.append("client_secret", GOOGLE_CLIENT_SECRET);
+  params.append("client_id", OUTLOOK_CLIENT_ID);
+  params.append("client_secret", OUTLOOK_CLIENT_SECRET);
   params.append("code", code);
   params.append("redirect_uri", REDIRECT_URI);
   params.append("grant_type", "authorization_code");
 
   console.log("Token request params:", {
-    client_id: GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING",
-    client_secret: GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING",
+    client_id: OUTLOOK_CLIENT_ID ? "PRESENT" : "MISSING",
+    client_secret: OUTLOOK_CLIENT_SECRET ? "PRESENT" : "MISSING",
     code: code ? "PRESENT" : "MISSING",
     redirect_uri: REDIRECT_URI,
   });
 
   try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params,
-    });
+    const response = await fetch(
+      "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+      }
+    );
 
     console.log("Token response status:", response.status);
 
@@ -151,12 +145,12 @@ const fetchGoogleTokens = async (code) => {
 };
 
 /**
- * Store Google OAuth tokens in Supabase
+ * Store Outlook OAuth tokens in Supabase
  * @param {string} userId - User ID
- * @param {Object} tokenData - Token response from Google
+ * @param {Object} tokenData - Token response from Microsoft
  * @returns {Promise<void>}
  */
-const storeGoogleTokens = async (userId, tokenData) => {
+const storeOutlookTokens = async (userId, tokenData) => {
   const { access_token, refresh_token, expires_in } = tokenData;
 
   if (!access_token) {
@@ -184,7 +178,7 @@ const storeGoogleTokens = async (userId, tokenData) => {
       .from("calendar_integrations")
       .select("id")
       .eq("user_id", userId)
-      .eq("provider", "google")
+      .eq("provider", "outlook")
       .maybeSingle();
 
     if (existingIntegration) {
@@ -210,7 +204,7 @@ const storeGoogleTokens = async (userId, tokenData) => {
         .from("calendar_integrations")
         .insert({
           user_id: userId,
-          provider: "google",
+          provider: "outlook",
           access_token,
           refresh_token: refresh_token || null,
           expires_at: expiresAt.toISOString(),
@@ -223,29 +217,29 @@ const storeGoogleTokens = async (userId, tokenData) => {
       return data;
     }
   } catch (error) {
-    console.error("Error storing Google tokens:", error);
+    console.error("Error storing Outlook tokens:", error);
     throw error;
   }
 };
 
 /**
- * Fetch user's Google Calendars
- * @param {string} accessToken - Google OAuth access token
+ * Fetch user's Outlook Calendars
+ * @param {string} accessToken - Microsoft OAuth access token
  * @returns {Promise<Array>} List of calendars
  */
-export const fetchGoogleCalendars = async (accessToken) => {
+export const fetchOutlookCalendars = async (accessToken) => {
   if (!accessToken) {
     throw new Error("No access token provided");
   }
 
   console.log(
-    "Fetching Google calendars with token:",
+    "Fetching Outlook calendars with token:",
     accessToken ? "PRESENT" : "MISSING"
   );
 
   try {
     const response = await fetch(
-      "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+      "https://graph.microsoft.com/v1.0/me/calendars",
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -265,59 +259,62 @@ export const fetchGoogleCalendars = async (accessToken) => {
 
     const data = await response.json();
     console.log("Calendar list data:", {
-      items: data.items
-        ? `${data.items.length} calendars`
+      items: data.value
+        ? `${data.value.length} calendars`
         : "No calendars found",
     });
 
-    if (!data.items) {
+    if (!data.value) {
       return [];
     }
 
     // Transform to standard format
-    const standardizedCalendars = data.items.map((calendar) => ({
+    const standardizedCalendars = data.value.map((calendar) => ({
       id: calendar.id,
-      name: calendar.summary,
-      description: calendar.description,
-      primary: calendar.primary || false,
-      email: calendar.id.includes("@") ? calendar.id : null,
-      provider: "google",
+      name: calendar.name,
+      description: calendar.description || "",
+      primary: calendar.isDefaultCalendar || false,
+      email: calendar.owner?.address,
+      provider: "outlook",
     }));
 
     console.log("Standardized calendars:", standardizedCalendars.length);
     return standardizedCalendars;
   } catch (error) {
-    console.error("Error fetching Google calendars:", error);
+    console.error("Error fetching Outlook calendars:", error);
     throw error;
   }
 };
 
 /**
- * Fetch events from a Google Calendar
+ * Fetch events from an Outlook Calendar
  * @param {string} accessToken - Access token
  * @param {string} calendarId - Calendar ID
  * @param {Date} startDate - Start date to fetch events from
  * @param {Date} endDate - End date to fetch events to
  * @returns {Promise<Array>} List of calendar events
  */
-export const fetchGoogleEvents = async (
+export const fetchOutlookEvents = async (
   accessToken,
   calendarId,
   startDate,
   endDate
 ) => {
   try {
+    // Format dates in ISO-8601 for Microsoft Graph API
+    const startDateStr = startDate.toISOString();
+    const endDateStr = endDate.toISOString();
+
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?` +
+      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView?` +
         new URLSearchParams({
-          timeMin: startDate.toISOString(),
-          timeMax: endDate.toISOString(),
-          singleEvents: true,
-          orderBy: "startTime",
+          startDateTime: startDateStr,
+          endDateTime: endDateStr,
         }),
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"',
         },
       }
     );
@@ -333,62 +330,65 @@ export const fetchGoogleEvents = async (
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
-        `Google Calendar API error: ${errorData.error?.message || "Unknown error"}`
+        `Microsoft Graph API error: ${errorData.error?.message || "Unknown error"}`
       );
     }
 
     const data = await response.json();
     console.log("Calendar events response:", {
       calendarId,
-      eventCount: data.items ? data.items.length : 0,
+      eventCount: data.value ? data.value.length : 0,
     });
 
-    if (!data.items) {
+    if (!data.value) {
       return [];
     }
 
     // Transform to standard format
-    return data.items.map((event) => ({
+    return data.value.map((event) => ({
       id: event.id,
-      title: event.summary || "Busy",
-      start_time: event.start.dateTime || event.start.date,
-      end_time: event.end.dateTime || event.end.date,
+      title: event.subject || "Busy",
+      start_time: event.start.dateTime + "Z", // Add Z to indicate UTC
+      end_time: event.end.dateTime + "Z",
       calendar_id: calendarId,
-      provider: "google",
-      all_day: !event.start.dateTime,
+      provider: "outlook",
+      all_day: !event.isAllDay,
     }));
   } catch (error) {
-    console.error("Error fetching Google Calendar events:", error);
+    console.error("Error fetching Outlook Calendar events:", error);
     throw error;
   }
 };
 
 /**
- * Refresh Google OAuth token
- * @param {string} refreshToken - Google OAuth refresh token
+ * Refresh Outlook OAuth token
+ * @param {string} refreshToken - Microsoft OAuth refresh token
  * @returns {Promise<Object>} New token data
  */
-export const refreshGoogleToken = async (refreshToken) => {
+export const refreshOutlookToken = async (refreshToken) => {
   if (!refreshToken) {
     throw new Error("No refresh token provided");
   }
 
-  console.log("Refreshing Google token");
+  console.log("Refreshing Outlook token");
 
   try {
     const params = new URLSearchParams();
-    params.append("client_id", GOOGLE_CLIENT_ID);
-    params.append("client_secret", GOOGLE_CLIENT_SECRET);
+    params.append("client_id", OUTLOOK_CLIENT_ID);
+    params.append("client_secret", OUTLOOK_CLIENT_SECRET);
     params.append("refresh_token", refreshToken);
     params.append("grant_type", "refresh_token");
 
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params,
-    });
+    const response = await fetch(
+      "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -413,7 +413,7 @@ export const refreshGoogleToken = async (refreshToken) => {
         expires_at: expiresAt.toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("provider", "google")
+      .eq("provider", "outlook")
       .eq("refresh_token", refreshToken)
       .select();
 
@@ -431,39 +431,25 @@ export const refreshGoogleToken = async (refreshToken) => {
 };
 
 /**
- * Disconnect Google Calendar integration
+ * Disconnect Outlook Calendar integration
  * @param {string} userId - User ID
  * @returns {Promise<void>}
  */
-export const disconnectGoogleCalendar = async (userId) => {
+export const disconnectOutlookCalendar = async (userId) => {
   try {
-    console.log("Disconnecting Google Calendar for user:", userId);
+    console.log("Disconnecting Outlook Calendar for user:", userId);
 
     // Get the integration to revoke access token
     const { data: integration, error } = await supabase
       .from("calendar_integrations")
       .select("access_token")
       .eq("user_id", userId)
-      .eq("provider", "google")
+      .eq("provider", "outlook")
       .single();
 
     if (error) {
       console.error("Error finding integration to disconnect:", error);
       throw error;
-    }
-
-    if (integration?.access_token) {
-      // Revoke access token with Google
-      console.log("Revoking Google access token");
-      await fetch(
-        `https://oauth2.googleapis.com/revoke?token=${integration.access_token}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        }
-      );
     }
 
     // Delete integration from database
@@ -472,7 +458,7 @@ export const disconnectGoogleCalendar = async (userId) => {
       .from("calendar_integrations")
       .delete()
       .eq("user_id", userId)
-      .eq("provider", "google");
+      .eq("provider", "outlook");
 
     if (deleteError) {
       console.error("Error deleting integration:", deleteError);
@@ -484,16 +470,16 @@ export const disconnectGoogleCalendar = async (userId) => {
       .from("selected_calendars")
       .delete()
       .eq("user_id", userId)
-      .eq("provider", "google");
+      .eq("provider", "outlook");
 
     if (deleteCalendarError) {
       console.error("Error deleting selected calendars:", deleteCalendarError);
       // Don't throw here, as the main integration was deleted successfully
     }
 
-    console.log("Google Calendar disconnected successfully");
+    console.log("Outlook Calendar disconnected successfully");
   } catch (error) {
-    console.error("Error disconnecting Google Calendar:", error);
+    console.error("Error disconnecting Outlook Calendar:", error);
     throw error;
   }
 };
@@ -520,15 +506,15 @@ const generateMockEvents = (startDate, endDate) => {
         end.setHours(start.getHours() + duration, 0, 0, 0);
 
         events.push({
-          id: `mock-${currentDate.toISOString()}-${i}`,
-          title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
+          id: `mock-outlook-${currentDate.toISOString()}-${i}`,
+          title: ["Meeting", "Call", "Appointment", "Conference", "Review"][
             Math.floor(Math.random() * 5)
           ],
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           all_day: false,
-          calendar_id: "primary",
-          provider: "google",
+          calendar_id: "outlook-primary",
+          provider: "outlook",
         });
       }
     }
