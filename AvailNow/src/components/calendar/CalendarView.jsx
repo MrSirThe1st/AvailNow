@@ -313,10 +313,56 @@ const CalendarView = ({
 
   // Generate an icon for an event (using the provider or type)
   const getEventIcon = (event) => {
-    // You can customize this based on event type or provider
+    // Get provider-specific styling
+    if (event.provider === "outlook") {
+      return (
+        <div className="rounded-full bg-blue-100 w-8 h-8 flex items-center justify-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-blue-600"
+          >
+            <path d="M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+            <path d="M21 12H9" />
+            <path d="m15 16 4-4-4-4" />
+          </svg>
+        </div>
+      );
+    } else if (event.provider === "google") {
+      return (
+        <div className="rounded-full bg-red-100 w-8 h-8 flex items-center justify-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-red-600"
+          >
+            <path d="M11 5l1-1 1 1v4l-1 1-1-1z" />
+            <path d="M11 14l1-1 1 1v4l-1 1-1-1z" />
+            <path d="M5 9.452V6l1-1h9l1 1v8l-1 1h-3.5" />
+            <rect x="3" y="15" width="7" height="5" rx="1" />
+          </svg>
+        </div>
+      );
+    }
+
+    // Default calendar icon
     return (
-      <div className="rounded-full bg-blue-100 w-8 h-8 flex items-center justify-center">
-        <CalendarIcon size={16} className="text-blue-600" />
+      <div className="rounded-full bg-purple-100 w-8 h-8 flex items-center justify-center">
+        <CalendarIcon size={16} className="text-purple-600" />
       </div>
     );
   };
@@ -434,21 +480,34 @@ const CalendarView = ({
               {connectedCalendars.map((calendar) => (
                 <div
                   key={calendar.id}
-                  className="flex items-center justify-between p-3 border rounded-md hover:border-primary hover:bg-blue-50 transition-colors"
+                  className={`flex items-center justify-between p-3 border rounded-md hover:border-primary hover:bg-${
+                    calendar.provider === "google"
+                      ? "red"
+                      : calendar.provider === "outlook"
+                        ? "blue"
+                        : "gray"
+                  }-50 transition-colors`}
                 >
                   <div className="flex items-center">
-                    <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
+                    <div
+                      className={`w-3 h-3 rounded-full bg-${
+                        calendar.provider === "google"
+                          ? "red"
+                          : calendar.provider === "outlook"
+                            ? "blue"
+                            : "gray"
+                      }-500 mr-3`}
+                    ></div>
                     <div>
                       <span className="font-medium capitalize">
-                        {calendar.provider}
+                        {calendar.provider === "google"
+                          ? "Google Calendar"
+                          : calendar.provider === "outlook"
+                            ? "Microsoft Outlook"
+                            : calendar.provider}
                       </span>
                       <div className="text-xs text-gray-500">
                         Active connection
-                        {calendar.provider === "google" && (
-                          <span className="ml-2 text-green-600 font-semibold">
-                            (Google Calendar)
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>

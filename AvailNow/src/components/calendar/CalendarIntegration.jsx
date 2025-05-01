@@ -40,12 +40,14 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
       name: "Apple Calendar",
       icon: <Calendar className="text-gray-500" />,
       color: "gray-500",
+      disabled: true,
     },
     {
       id: CALENDAR_PROVIDERS.CALENDLY,
       name: "Calendly",
       icon: <Calendar className="text-green-500" />,
       color: "green-500",
+      disabled: true,
     },
   ];
 
@@ -223,13 +225,18 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
           <button
             key={provider.id}
             className={`border rounded-lg p-4 flex items-center hover:border-primary
-              ${selectedProvider?.id === provider.id ? "border-primary bg-primary bg-opacity-5" : "border-gray-200"}
-            `}
-            onClick={() => setSelectedProvider(provider)}
+    ${selectedProvider?.id === provider.id ? "border-primary bg-primary bg-opacity-5" : "border-gray-200"}
+    ${provider.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+  `}
+            onClick={() => !provider.disabled && setSelectedProvider(provider)}
+            disabled={provider.disabled}
           >
             <div className="flex-shrink-0 mr-3">{provider.icon}</div>
             <div className="text-left">
               <p className="font-medium">{provider.name}</p>
+              {provider.disabled && (
+                <p className="text-xs text-gray-500">Coming soon</p>
+              )}
             </div>
           </button>
         ))}

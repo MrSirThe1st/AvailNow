@@ -1,10 +1,14 @@
-// src/pages/Calendar.jsx
+// src/pages/Calendar.jsx - Update to support Outlook integration
+
 import React, { useState, useEffect } from "react";
 import { Loader } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import { handleCalendarCallback } from "../lib/calendarService";
+import {
+  handleCalendarCallback,
+  CALENDAR_PROVIDERS,
+} from "../lib/calendarService";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { supabase } from "../lib/supabase";
 
@@ -57,7 +61,7 @@ const Calendar = () => {
             user.id
           );
 
-          console.log("Calendar connection successful:", result);
+          console.log(`${provider} calendar connection successful:`, result);
 
           // Important change: Save the actual calendars that were returned
           if (result.calendars && result.calendars.length > 0) {
@@ -66,15 +70,24 @@ const Calendar = () => {
 
             // Also create a fake integration object that CalendarView can use
             const fakeIntegration = {
-              id: "google-integration",
-              provider: "google",
+              id: `${provider}-integration`,
+              provider: provider,
               user_id: user.id,
               created_at: new Date().toISOString(),
               access_token: "present", // we don't show the actual token
               expires_at: new Date(Date.now() + 3600000).toISOString(),
             };
 
-            setConnectedCalendars([fakeIntegration]);
+            setConnectedCalendars((prevCalendars) => {
+              // Check if we already have this provider in connected calendars
+              const existingProvider = prevCalendars.find(
+                (cal) => cal.provider === provider
+              );
+              if (existingProvider) {
+                return prevCalendars;
+              }
+              return [...prevCalendars, fakeIntegration];
+            });
           }
 
           // Clean up
@@ -115,16 +128,6 @@ const Calendar = () => {
 
       console.log("Loading connected calendars");
 
-      // Query without filtering by user ID first to see if any exist
-      const { data: allIntegrations, error: allError } = await supabase
-        .from("calendar_integrations")
-        .select("*");
-
-      console.log(
-        "All calendar integrations in database:",
-        allIntegrations || []
-      );
-
       // Now try with the user ID filter
       if (user?.id) {
         const { data: userIntegrations, error: userError } = await supabase
@@ -140,7 +143,32 @@ const Calendar = () => {
           // Check if we have integrations
           if (userIntegrations && userIntegrations.length > 0) {
             setConnectedCalendars(userIntegrations);
-            // Note: In a complete implementation, we'd fetch the calendar list here
+
+            // For each calendar, fetch the calendar list
+            const calendarsByProvider = {};
+
+            for (const integration of userIntegrations) {
+              try {
+                // You would need to implement this function
+                const calendarsForProvider = await fetchCalendarsForProvider(
+                  user.id,
+                  integration.provider
+                );
+                calendarsByProvider[integration.provider] =
+                  calendarsForProvider;
+              } catch (err) {
+                console.error(
+                  `Error fetching calendars for ${integration.provider}:`,
+                  err
+                );
+              }
+            }
+
+            // Flatten and store all calendars
+            const allCalendars = Object.values(calendarsByProvider).flat();
+            if (allCalendars.length > 0) {
+              setCalendarsList(allCalendars);
+            }
           } else {
             console.log("No connected calendars found in database");
 
@@ -162,6 +190,32 @@ const Calendar = () => {
     }
   };
 
+  // Placeholder for the function to fetch calendars for a specific provider
+  const fetchCalendarsForProvider = async (userId, provider) => {
+    // In a real implementation, you would call your calendar service here
+    // For now, return mock data
+    if (provider === CALENDAR_PROVIDERS.GOOGLE) {
+      return [
+        {
+          id: "google-primary",
+          name: "Primary Calendar",
+          provider: "google",
+          primary: true,
+        },
+      ];
+    } else if (provider === CALENDAR_PROVIDERS.OUTLOOK) {
+      return [
+        {
+          id: "outlook-primary",
+          name: "Outlook Calendar",
+          provider: "outlook",
+          primary: true,
+        },
+      ];
+    }
+    return [];
+  };
+
   // Handle adding new calendar integration
   const handleAddCalendar = async (newCalendars) => {
     try {
@@ -169,21 +223,36 @@ const Calendar = () => {
 
       // Store the actual calendar data
       if (newCalendars && newCalendars.length > 0) {
-        setCalendarsList(newCalendars);
+        setCalendarsList((prevCalendars) => {
+          // Merge with existing calendars, avoiding duplicates by ID
+          const existingIds = prevCalendars.map((cal) => cal.id);
+          const newUniqueCals = newCalendars.filter(
+            (cal) => !existingIds.includes(cal.id)
+          );
+          return [...prevCalendars, ...newUniqueCals];
+        });
 
-        // Create integration objects based on the calendars
-        const integrations = newCalendars.map((calendar) => ({
-          id: calendar.id, // Use actual Google Calendar ID
-          provider: "google",
-          user_id: user.id,
-          calendar_id: calendar.id,
-          name: calendar.name,
-          created_at: new Date().toISOString(),
-          access_token: "present",
-          expires_at: new Date(Date.now() + 3600000).toISOString(),
-        }));
+        // Get the provider from the first calendar
+        const provider = newCalendars[0].provider;
 
-        setConnectedCalendars(integrations);
+        // Check if we already have this provider's integration
+        const hasProvider = connectedCalendars.some(
+          (cal) => cal.provider === provider
+        );
+
+        if (!hasProvider) {
+          // Create integration object based on the provider
+          const newIntegration = {
+            id: `${provider}-integration-${Date.now()}`,
+            provider: provider,
+            user_id: user.id,
+            created_at: new Date().toISOString(),
+            access_token: "present",
+            expires_at: new Date(Date.now() + 3600000).toISOString(),
+          };
+
+          setConnectedCalendars((prev) => [...prev, newIntegration]);
+        }
       }
 
       setShowCalendarModal(false);
@@ -195,7 +264,6 @@ const Calendar = () => {
 
   return (
     <div>
-
       {/* OAuth Callback Status */}
       {callbackProcessing && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
@@ -218,29 +286,51 @@ const Calendar = () => {
         </div>
       )}
 
-      {/* Calendar Status */}
-      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <h3 className="font-bold mb-2">Calendar Integration Status:</h3>
-        <p>
-          Connected Calendars:{" "}
-          {calendarsList.length || connectedCalendars.length}
-        </p>
-        <p>
-          Status:{" "}
-          {calendarsList.length > 0
-            ? "✅ Google Calendar connected successfully"
-            : connectedCalendars.length > 0
-              ? "✅ Calendar integration found in database"
-              : "❌ No calendars connected"}
-        </p>
-        {calendarsList.length === 0 && connectedCalendars.length === 0 && (
-          <button
-            onClick={() => setShowCalendarModal(true)}
-            className="mt-2 bg-blue-500 text-white px-4 py-1 rounded"
-          >
-            Connect Google Calendar
-          </button>
-        )}
+      {/* Connected Calendars Display */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Google Calendar Status */}
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="font-bold mb-2">Google Calendar:</h3>
+          <p>
+            Status:{" "}
+            {connectedCalendars.some((cal) => cal.provider === "google")
+              ? "✅ Connected"
+              : "❌ Not connected"}
+          </p>
+          {!connectedCalendars.some((cal) => cal.provider === "google") && (
+            <button
+              onClick={() => {
+                setShowCalendarModal(true);
+                // You could pre-select Google here if you want
+              }}
+              className="mt-2 bg-blue-500 text-white px-4 py-1 rounded"
+            >
+              Connect Google Calendar
+            </button>
+          )}
+        </div>
+
+        {/* Outlook Calendar Status */}
+        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+          <h3 className="font-bold mb-2">Microsoft Outlook:</h3>
+          <p>
+            Status:{" "}
+            {connectedCalendars.some((cal) => cal.provider === "outlook")
+              ? "✅ Connected"
+              : "❌ Not connected"}
+          </p>
+          {!connectedCalendars.some((cal) => cal.provider === "outlook") && (
+            <button
+              onClick={() => {
+                setShowCalendarModal(true);
+                // You could pre-select Outlook here if you want
+              }}
+              className="mt-2 bg-indigo-500 text-white px-4 py-1 rounded"
+            >
+              Connect Outlook Calendar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Enhanced Calendar View Component */}
@@ -260,9 +350,11 @@ const Calendar = () => {
         Provider in localStorage:{" "}
         {localStorage.getItem("calendarAuthProvider") || "NONE"}
         <br />
-        Connected Calendars: {connectedCalendars.length}
+        Connected Calendars: {connectedCalendars.length} (
+        {connectedCalendars.map((c) => c.provider).join(", ")})
         <br />
-        Calendar List: {calendarsList.length}
+        Calendar List: {calendarsList.length} (
+        {calendarsList.map((c) => c.provider).join(", ")})
         <br />
         User ID: {user?.id || "Not loaded"}
       </div>

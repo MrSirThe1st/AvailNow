@@ -1,12 +1,6 @@
-/**
- * Calendar Service
- * Centralized service for managing calendar integrations across different providers
- */
-
 import { supabase } from "./supabase";
 import * as googleCalendar from "./calendarProviders/googleCalendar";
-// Import other calendar providers as they're implemented
-// import * as outlookCalendar from "./calendarProviders/outlookCalendar";
+import * as outlookCalendar from "./calendarProviders/outlookCalendar";
 // import * as appleCalendar from "./calendarProviders/appleCalendar";
 
 // Supported calendar providers
@@ -36,8 +30,7 @@ export const initiateCalendarAuth = (provider) => {
       return googleCalendar.initiateGoogleAuth();
 
     case CALENDAR_PROVIDERS.OUTLOOK:
-      // return outlookCalendar.initiateOutlookAuth();
-      throw new Error("Outlook Calendar integration not yet implemented");
+      return outlookCalendar.initiateOutlookAuth();
 
     case CALENDAR_PROVIDERS.APPLE:
       // return appleCalendar.initiateAppleAuth();
@@ -69,8 +62,11 @@ export const handleCalendarCallback = async (provider, params, userId) => {
       );
 
     case CALENDAR_PROVIDERS.OUTLOOK:
-      // return outlookCalendar.handleOutlookCallback(params.code, params.state, userId);
-      throw new Error("Outlook Calendar integration not yet implemented");
+      return outlookCalendar.handleOutlookCallback(
+        params.code,
+        params.state,
+        userId
+      );
 
     case CALENDAR_PROVIDERS.APPLE:
       // return appleCalendar.handleAppleCallback(params.code, params.state, userId);
@@ -150,8 +146,7 @@ export const fetchCalendars = async (userId, provider) => {
       return googleCalendar.fetchGoogleCalendars(integration.access_token);
 
     case CALENDAR_PROVIDERS.OUTLOOK:
-      // return outlookCalendar.fetchOutlookCalendars(integration.access_token);
-      throw new Error("Outlook Calendar integration not yet implemented");
+      return outlookCalendar.fetchOutlookCalendars(integration.access_token);
 
     case CALENDAR_PROVIDERS.APPLE:
       // return appleCalendar.fetchAppleCalendars(integration.access_token);
@@ -201,20 +196,29 @@ export const fetchCalendarEvents = async (
     const tokenExpiresAt = new Date(integration.expires_at);
 
     // If token expires in less than 5 minutes, refresh it
-    if (tokenExpiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
-      console.log("Access token expired or about to expire, refreshing...");
+     if (tokenExpiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
+       console.log("Access token expired or about to expire, refreshing...");
 
-      if (provider === CALENDAR_PROVIDERS.GOOGLE && integration.refresh_token) {
-        const newTokenData = await googleCalendar.refreshGoogleToken(
-          integration.refresh_token
-        );
-
-        // Update the integration with the new token
-        integration.access_token = newTokenData.access_token;
-      } else {
-        throw new Error("Unable to refresh token");
-      }
-    }
+       if (
+         provider === CALENDAR_PROVIDERS.GOOGLE &&
+         integration.refresh_token
+       ) {
+         const newTokenData = await googleCalendar.refreshGoogleToken(
+           integration.refresh_token
+         );
+         integration.access_token = newTokenData.access_token;
+       } else if (
+         provider === CALENDAR_PROVIDERS.OUTLOOK &&
+         integration.refresh_token
+       ) {
+         const newTokenData = await outlookCalendar.refreshOutlookToken(
+           integration.refresh_token
+         );
+         integration.access_token = newTokenData.access_token;
+       } else {
+         throw new Error("Unable to refresh token");
+       }
+     }
 
     // Now fetch events based on the provider
     switch (provider) {
@@ -227,7 +231,12 @@ export const fetchCalendarEvents = async (
         );
 
       case CALENDAR_PROVIDERS.OUTLOOK:
-        throw new Error("Outlook Calendar integration not yet implemented");
+        return await outlookCalendar.fetchOutlookEvents(
+          integration.access_token,
+          calendarId,
+          startDate,
+          endDate
+        );
 
       case CALENDAR_PROVIDERS.APPLE:
         throw new Error("Apple Calendar integration not yet implemented");
@@ -291,8 +300,7 @@ export const disconnectCalendar = async (userId, provider) => {
       return googleCalendar.disconnectGoogleCalendar(userId);
 
     case CALENDAR_PROVIDERS.OUTLOOK:
-      // return outlookCalendar.disconnectOutlookCalendar(userId);
-      throw new Error("Outlook Calendar integration not yet implemented");
+      return outlookCalendar.disconnectOutlookCalendar(userId);
 
     case CALENDAR_PROVIDERS.APPLE:
       // return appleCalendar.disconnectAppleCalendar(userId);
