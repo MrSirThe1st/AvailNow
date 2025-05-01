@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Clock } from "lucide-react";
 import { createStyles } from "./EmbedWidgetStyles";
 import { fetchCalendarEvents } from "../../lib/calendarService";
-import { getConnectedCalendars } from "../../lib/calendarService";
+import { getAvailabilityForDateRange } from "../../lib/widgetService";
 import { formatDate, doTimesOverlap } from "../../lib/calendarUtils";
+import { trackWidgetEvent } from "../../lib/widgetService";
 
-// DateCellWithDotIndicator component defined inline to ensure everything works
+// DateCellWithDotIndicator component for calendar cell display
 const DateCellWithDotIndicator = ({
   date,
   availabilityPattern = [],
@@ -118,6 +118,7 @@ const EmbedWidget = ({
   const [nextAvailable, setNextAvailable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [availabilitySlots, setAvailabilitySlots] = useState([]);
 
   // Get styles
   const styles = createStyles(theme, accentColor, textColor, compact);
@@ -170,8 +171,8 @@ const EmbedWidget = ({
     return result;
   };
 
-  // Generate availability pattern for a date
-  const generateAvailabilityPattern = (date, events) => {
+  // Generate availability pattern for a date based on real calendar events and availability slots
+  const generateAvailabilityPattern = (date, events, availabilitySlots) => {
     // If it's a weekend, return all unavailable
     if (date.getDay() === 0 || date.getDay() === 6) {
       return Array(8).fill(false);
@@ -195,72 +196,39 @@ const EmbedWidget = ({
       hourEnd.setHours(hour + 1, 0, 0, 0);
 
       // Check if this hour overlaps with any event
-      const hasOverlap = events.some((event) => {
+      const hasEventOverlap = events.some((event) => {
         const eventStart = new Date(event.start_time || event.startTime);
         const eventEnd = new Date(event.end_time || event.endTime);
+        return doTimesOverlap(hourStart, hourEnd, eventStart, eventEnd);
+      });
+
+      // Check if this hour is marked as available in availability slots
+      const hasAvailabilitySlot = availabilitySlots.some((slot) => {
+        const slotStart = new Date(slot.start_time);
+        const slotEnd = new Date(slot.end_time);
         return (
-          (hourStart >= eventStart && hourStart < eventEnd) ||
-          (hourEnd > eventStart && hourEnd <= eventEnd) ||
-          (eventStart >= hourStart && eventEnd <= hourEnd)
+          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) && slot.available
         );
       });
 
-      // If no overlap, slot is available
-      pattern.push(!hasOverlap);
+      // Slot is available if it's not overlapping with an event AND
+      // either there's no availability slot for this time OR there is one that's marked as available
+      const isAvailable = !hasEventOverlap && 
+        (availabilitySlots.length === 0 || hasAvailabilitySlot);
+      
+      pattern.push(isAvailable);
     }
 
     return pattern;
   };
 
-  // Generate mock events for testing
-  const generateMockEvents = (startDate, endDate) => {
-    const events = [];
-    const currentDate = new Date(startDate);
-
-    while (currentDate <= endDate) {
-      // Skip weekends
-      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-        // Create 2-3 events per day
-        const numEvents = Math.floor(Math.random() * 2) + 2;
-
-        for (let i = 0; i < numEvents; i++) {
-          const hour = 9 + Math.floor(Math.random() * 8); // 9am to 4pm
-          const duration = Math.floor(Math.random() * 3) + 1; // 1-3 hours
-
-          const start = new Date(currentDate);
-          start.setHours(hour, 0, 0, 0);
-
-          const end = new Date(start);
-          end.setHours(start.getHours() + duration, 0, 0, 0);
-
-          events.push({
-            id: `mock-${currentDate.toISOString()}-${i}`,
-            title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
-              Math.floor(Math.random() * 5)
-            ],
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            all_day: false,
-            calendar_id: "primary",
-            provider: "google",
-          });
-        }
-      }
-
-      // Move to next day
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return events;
-  };
-
-  // Generate time slots for a specific date
-  const generateTimeSlotsForDate = (dateString, events) => {
+  // Generate time slots for a specific date using real events and availability data
+  const generateTimeSlotsForDate = (dateString, events, availabilitySlots) => {
     const date = new Date(dateString);
     const day = date.getDay();
 
     // No slots on Sundays
-    if (day === 0) return { morning: [], afternoon: [] };
+    if (day === 0 || day === 6) return { morning: [], afternoon: [] };
 
     // Filter events for this date
     const dayStart = new Date(date);
@@ -273,6 +241,12 @@ const EmbedWidget = ({
       const eventStart = new Date(event.start_time);
       const eventEnd = new Date(event.end_time);
       return eventStart <= dayEnd && eventEnd >= dayStart;
+    });
+
+    // Filter availability slots for this date
+    const dayAvailabilitySlots = availabilitySlots.filter((slot) => {
+      const slotStart = new Date(slot.start_time);
+      return slotStart.toDateString() === date.toDateString();
     });
 
     // Morning and afternoon slots
@@ -288,12 +262,25 @@ const EmbedWidget = ({
         const slotEnd = new Date(date);
         slotEnd.setHours(hour, minutes + 30, 0, 0);
 
-        // Check if this slot is available (no overlapping events)
-        const isAvailable = !dayEvents.some((event) => {
+        // Check if this slot overlaps with any event
+        const hasEventOverlap = dayEvents.some((event) => {
           const eventStart = new Date(event.start_time);
           const eventEnd = new Date(event.end_time);
           return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
         });
+
+        // Check if this slot is marked as available in availability slots
+        const matchingAvailabilitySlot = dayAvailabilitySlots.find((slot) => {
+          const availStart = new Date(slot.start_time);
+          const availEnd = new Date(slot.end_time);
+          return doTimesOverlap(slotStart, slotEnd, availStart, availEnd);
+        });
+
+        // Determine if slot is available
+        const isAvailable = 
+          !hasEventOverlap && 
+          (dayAvailabilitySlots.length === 0 || 
+            (matchingAvailabilitySlot && matchingAvailabilitySlot.available));
 
         // Format time for display
         const ampm = hour >= 12 ? "pm" : "am";
@@ -304,6 +291,8 @@ const EmbedWidget = ({
         const slot = {
           time,
           available: isAvailable,
+          start: slotStart,
+          end: slotEnd
         };
 
         // Sort into morning and afternoon
@@ -318,9 +307,9 @@ const EmbedWidget = ({
     return { morning: morningSlots, afternoon: afternoonSlots };
   };
 
-  // Fetch availability data for the specified user
+  // Fetch availability and calendar data for the widget
   useEffect(() => {
-    const fetchAvailability = async () => {
+    const fetchAvailabilityData = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -334,27 +323,79 @@ const EmbedWidget = ({
         const endDate = new Date(year, month + 1, 0);
         endDate.setHours(23, 59, 59, 999);
 
-        // Get mock events
-        const events = generateMockEvents(startDate, endDate);
-        setCalendarEvents(events);
+        // Track widget view
+        if (userId) {
+          await trackWidgetEvent(userId, "view");
+        }
+
+        // Fetch calendar events using real data
+        let realEvents = [];
+        let realAvailabilitySlots = [];
+
+        if (userId) {
+          try {
+            // Attempt to fetch real calendar events
+            const events = await fetchCalendarEvents(
+              userId, 
+              "google", // Default provider
+              "primary", // Default calendar ID
+              startDate, 
+              endDate
+            );
+            
+            if (events && events.length > 0) {
+              realEvents = events;
+              console.log("Fetched real calendar events:", events.length);
+            }
+            
+            // Attempt to fetch real availability slots
+            const availSlots = await getAvailabilityForDateRange(
+              userId,
+              startDate,
+              endDate
+            );
+            
+            if (availSlots && availSlots.length > 0) {
+              realAvailabilitySlots = availSlots;
+              console.log("Fetched real availability slots:", availSlots.length);
+            } else {
+              console.log("No availability slots found, using default available times");
+            }
+          } catch (err) {
+            console.warn("Error fetching real data:", err);
+            // Continue with empty arrays (all times available)
+          }
+        }
+
+        setCalendarEvents(realEvents);
+        setAvailabilitySlots(realAvailabilitySlots);
 
         // Generate calendar data
         const calendarDates = getDatesForCalendarView(startDate);
 
         // Process events into availability patterns
         const processedData = calendarDates.map((dayData) => {
-          const dayEvents = events.filter((event) => {
+          const dayEvents = realEvents.filter((event) => {
             const eventDate = new Date(event.start_time);
             return eventDate.toDateString() === dayData.date.toDateString();
           });
 
+          const dayAvailabilitySlots = realAvailabilitySlots 
+            ? realAvailabilitySlots.filter((slot) => {
+                const slotDate = new Date(slot.start_time);
+                return slotDate.toDateString() === dayData.date.toDateString();
+              })
+            : [];
+
           // Generate availability pattern for this day
-          const pattern = generateAvailabilityPattern(dayData.date, dayEvents);
+          const pattern = generateAvailabilityPattern(
+            dayData.date, 
+            dayEvents, 
+            dayAvailabilitySlots
+          );
 
           // Count available slots
-          const availableSlots = pattern.filter(
-            (isAvailable) => isAvailable
-          ).length;
+          const availableSlots = pattern.filter(isAvailable => isAvailable).length;
 
           return {
             ...dayData,
@@ -362,6 +403,7 @@ const EmbedWidget = ({
             available: availableSlots > 0,
             availableSlots,
             events: dayEvents,
+            availabilitySlots: dayAvailabilitySlots
           };
         });
 
@@ -380,7 +422,11 @@ const EmbedWidget = ({
 
           // Set the first available day as selected by default
           setSelectedDate(availableDay.date);
-          setTimeSlots(generateTimeSlotsForDate(availableDay.date, events));
+          setTimeSlots(generateTimeSlotsForDate(
+            availableDay.date, 
+            realEvents, 
+            realAvailabilitySlots
+          ));
         }
       } catch (err) {
         console.error("Error fetching availability:", err);
@@ -390,8 +436,8 @@ const EmbedWidget = ({
       }
     };
 
-    fetchAvailability();
-  }, [currentMonth]);
+    fetchAvailabilityData();
+  }, [currentMonth, userId]);
 
   // Format date in a readable way
   const formatDateForDisplay = (date) => {
@@ -402,11 +448,16 @@ const EmbedWidget = ({
   // Handle date selection
   const handleDateClick = (date) => {
     setSelectedDate(date);
-    setTimeSlots(generateTimeSlotsForDate(date, calendarEvents));
+    setTimeSlots(generateTimeSlotsForDate(date, calendarEvents, availabilitySlots));
   };
 
   // Handle booking click
   const handleBookingClick = (slot) => {
+    // Track booking click
+    if (userId) {
+      trackWidgetEvent(userId, "booking");
+    }
+    
     // In a real implementation, this would redirect to a booking page or show a form
     alert(
       `Booking for ${formatDateForDisplay(new Date(selectedDate))} at ${slot.time}`
@@ -519,11 +570,16 @@ const EmbedWidget = ({
         <div style={styles.bookButtonContainer}>
           <button
             style={styles.bookButton}
-            onClick={() =>
+            onClick={() => {
+              // Track widget click
+              if (userId) {
+                trackWidgetEvent(userId, "click");
+              }
+              
               alert(
                 `Booking appointment on ${formatDateForDisplay(new Date(selectedDate))}`
               )
-            }
+            }}
           >
             BOOK
           </button>

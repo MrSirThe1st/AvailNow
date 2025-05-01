@@ -3,8 +3,6 @@ import React from "react";
 const Settings = () => {
   return (
     <div className="w-full">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow md:col-span-2">
           <h2 className="text-lg font-semibold mb-4">General Settings</h2>
