@@ -2,7 +2,6 @@ import { supabase } from "../supabase";
 import authService from "../authService";
 
 const OUTLOOK_CLIENT_ID = import.meta.env.VITE_OUTLOOK_CLIENT_ID;
-const OUTLOOK_CLIENT_SECRET = import.meta.env.VITE_OUTLOOK_CLIENT_SECRET;
 const REDIRECT_URI =
   import.meta.env.VITE_OUTLOOK_REDIRECT_URI ||
   `${window.location.origin}/calendar`;
@@ -421,7 +420,6 @@ export const refreshOutlookToken = async (refreshToken) => {
   try {
     const params = new URLSearchParams();
     params.append("client_id", OUTLOOK_CLIENT_ID);
-    params.append("client_secret", OUTLOOK_CLIENT_SECRET);
     params.append("refresh_token", refreshToken);
     params.append("grant_type", "refresh_token");
 
