@@ -125,11 +125,6 @@ const fetchOutlookTokensWithPKCE = async (code, codeVerifier) => {
   params.append("grant_type", "authorization_code");
   params.append("code_verifier", codeVerifier);
 
-  // Only include client secret if available (should be kept on server in production)
-  if (OUTLOOK_CLIENT_SECRET) {
-    params.append("client_secret", OUTLOOK_CLIENT_SECRET);
-  }
-
   try {
     const response = await fetch(
       "https://login.microsoftonline.com/common/oauth2/v2.0/token",
@@ -323,8 +318,41 @@ export const fetchOutlookEvents = async (
     const startDateStr = startDate.toISOString();
     const endDateStr = endDate.toISOString();
 
+    // Special handling for "primary" ID - we need to get the default calendar ID first
+    let targetCalendarId = calendarId;
+    if (calendarId === "primary") {
+      // Fetch the user's calendars to find the default one
+      const calResponse = await fetch(
+        "https://graph.microsoft.com/v1.0/me/calendars",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Prefer: 'outlook.timezone="UTC"',
+          },
+        }
+      );
+
+      if (!calResponse.ok) {
+        throw new Error(`Failed to fetch calendars: ${calResponse.statusText}`);
+      }
+
+      const calData = await calResponse.json();
+      // Find the default calendar (usually the first one or the one marked as default)
+      if (calData.value && calData.value.length > 0) {
+        // Look for the default calendar, or use the first one
+        const defaultCal =
+          calData.value.find((cal) => cal.isDefaultCalendar) ||
+          calData.value[0];
+        targetCalendarId = defaultCal.id;
+        console.log("Using default calendar ID:", targetCalendarId);
+      } else {
+        throw new Error("No calendars found for the user");
+      }
+    }
+
+    // Now fetch events using the correct calendar ID
     const response = await fetch(
-      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView?` +
+      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(targetCalendarId)}/calendarView?` +
         new URLSearchParams({
           startDateTime: startDateStr,
           endDateTime: endDateStr,
@@ -340,7 +368,7 @@ export const fetchOutlookEvents = async (
     if (response.status === 404) {
       // Calendar not found or no longer accessible
       console.log(
-        `Calendar ${calendarId} not found or inaccessible, using mock data`
+        `Calendar ${targetCalendarId} not found or inaccessible, using mock data`
       );
       return generateMockEvents(startDate, endDate);
     }
@@ -354,7 +382,7 @@ export const fetchOutlookEvents = async (
 
     const data = await response.json();
     console.log("Calendar events response:", {
-      calendarId,
+      calendarId: targetCalendarId,
       eventCount: data.value ? data.value.length : 0,
     });
 
@@ -368,7 +396,7 @@ export const fetchOutlookEvents = async (
       title: event.subject || "Busy",
       start_time: event.start.dateTime + "Z", // Add Z to indicate UTC
       end_time: event.end.dateTime + "Z",
-      calendar_id: calendarId,
+      calendar_id: targetCalendarId,
       provider: "outlook",
       all_day: !event.isAllDay,
     }));

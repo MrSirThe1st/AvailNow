@@ -4,13 +4,13 @@ import { Loader, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
-import authService from "../lib/authService";
 import {
   handleCalendarCallback,
   CALENDAR_PROVIDERS,
 } from "../lib/calendarService";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { supabase } from "../lib/supabase";
+import authService from "../lib/authService";
 
 const Calendar = () => {
   const { user } = useAuth();
@@ -42,84 +42,84 @@ const Calendar = () => {
   }, [user]);
 
   // Process OAuth callback if present in URL
-useEffect(() => {
-  const processOAuthCallback = async () => {
-    // Get URL parameters
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
+  useEffect(() => {
+    const processOAuthCallback = async () => {
+      // Get URL parameters
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const state = params.get("state");
 
-    // Get provider from localStorage
-    const provider = localStorage.getItem("calendarAuthProvider");
+      // Get provider from localStorage
+      const provider = localStorage.getItem("calendarAuthProvider");
 
-    // Only process if we have all required parameters
-    if (code && state && provider && user?.id) {
-      setCallbackProcessing(true);
+      // Only process if we have all required parameters
+      if (code && state && provider && user?.id) {
+        setCallbackProcessing(true);
 
-      // Clean URL parameters to prevent reprocessing
-      navigate("/calendar", { replace: true });
+        // Clean URL parameters to prevent reprocessing
+        navigate("/calendar", { replace: true });
 
-      try {
-        console.log(`Processing ${provider} OAuth callback...`);
+        try {
+          console.log(`Processing ${provider} OAuth callback...`);
 
-        // Process the callback
-        const result = await handleCalendarCallback(
-          provider,
-          { code, state },
-          user.id
-        );
+          // Process the callback
+          const result = await handleCalendarCallback(
+            provider,
+            { code, state },
+            user.id
+          );
 
-        console.log("OAuth callback successful:", result);
+          console.log("OAuth callback successful:", result);
 
-        // Update connected calendars state
-        if (result && result.calendars) {
-          // Add the integration to connected calendars
-          const newIntegration = {
-            id: `${provider}-integration-${Date.now()}`,
-            provider: provider,
-            user_id: user.id,
-            created_at: new Date().toISOString(),
-            calendar_id: "primary",
-          };
+          // Update connected calendars state
+          if (result && result.calendars) {
+            // Add the integration to connected calendars
+            const newIntegration = {
+              id: `${provider}-integration-${Date.now()}`,
+              provider: provider,
+              user_id: user.id,
+              created_at: new Date().toISOString(),
+              calendar_id: "primary",
+            };
 
-          setConnectedCalendars((prev) => {
-            // Avoid duplicates
-            if (!prev.some((cal) => cal.provider === provider)) {
-              return [...prev, newIntegration];
-            }
-            return prev;
-          });
+            setConnectedCalendars((prev) => {
+              // Avoid duplicates
+              if (!prev.some((cal) => cal.provider === provider)) {
+                return [...prev, newIntegration];
+              }
+              return prev;
+            });
 
-          // Add calendars to the list
-          setCalendarsList((prev) => {
-            const existingIds = prev.map((cal) => cal.id);
-            const newCals = result.calendars
-              .filter((cal) => !existingIds.includes(cal.id))
-              .map((cal) => ({
-                ...cal,
-                selected: true,
-              }));
-            return [...prev, ...newCals];
-          });
+            // Add calendars to the list
+            setCalendarsList((prev) => {
+              const existingIds = prev.map((cal) => cal.id);
+              const newCals = result.calendars
+                .filter((cal) => !existingIds.includes(cal.id))
+                .map((cal) => ({
+                  ...cal,
+                  selected: true,
+                }));
+              return [...prev, ...newCals];
+            });
+          }
+
+          setCallbackError(null);
+        } catch (err) {
+          console.error("Error processing OAuth callback:", err);
+          setCallbackError(
+            "Failed to connect calendar: " + (err.message || "Unknown error")
+          );
+        } finally {
+          setCallbackProcessing(false);
+
+          // Clean up
+          localStorage.removeItem("calendarAuthProvider");
         }
-
-        setCallbackError(null);
-      } catch (err) {
-        console.error("Error processing OAuth callback:", err);
-        setCallbackError(
-          "Failed to connect calendar: " + (err.message || "Unknown error")
-        );
-      } finally {
-        setCallbackProcessing(false);
-
-        // Clean up
-        localStorage.removeItem("calendarAuthProvider");
       }
-    }
-  };
+    };
 
-  processOAuthCallback();
-}, [user, navigate]);
+    processOAuthCallback();
+  }, [user, navigate]);
 
   // Load connected calendars on mount
   useEffect(() => {

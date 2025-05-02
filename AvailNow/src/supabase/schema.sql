@@ -300,3 +300,4 @@ BEGIN
   RETURN json_build_object('success', true, 'message', 'Token would be refreshed here');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
