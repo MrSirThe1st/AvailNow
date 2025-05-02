@@ -1,19 +1,15 @@
+// src/components/calendar/CalendarIntegration.jsx
 import React, { useState, useEffect } from "react";
 import { X, Check, Calendar, User, Loader, AlertTriangle } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/SupabaseAuthContext";
 import {
   CALENDAR_PROVIDERS,
   initiateCalendarAuth,
-  handleCalendarCallback,
   saveSelectedCalendars,
 } from "../../lib/calendarService";
 
 const CalendarIntegration = ({ onClose, onSuccess }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
-  const [userData, setUserData] = useState(null);
 
   const [step, setStep] = useState("select");
   const [selectedProvider, setSelectedProvider] = useState(null);
@@ -51,106 +47,11 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     },
   ];
 
-  // Set user data when user is available
+  // Process OAuth callback
   useEffect(() => {
-    if (user?.id) {
-      setUserData({ id: user.id });
-      console.log("User authenticated:", user.id);
-    } else {
-      console.error("No authenticated user found");
-    }
-  }, [user]);
-
-  // Check for OAuth callback using both location and window.location
-  useEffect(() => {
-    // First, log the full URL for debugging
-    console.log("Full current URL:", window.location.href);
-
-    // Use window.location.search directly instead of React Router's location
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlCode = urlParams.get("code");
-    const urlState = urlParams.get("state");
-
-    // Also check React Router's location as backup
-    const routerParams = new URLSearchParams(location.search);
-    const routerCode = routerParams.get("code");
-    const routerState = routerParams.get("state");
-
-    // Use whichever source has the code
-    const code = urlCode || routerCode;
-    const state = urlState || routerState;
-
-    const provider = localStorage.getItem("calendarAuthProvider");
-
-    console.log("Checking OAuth callback params from URL:", {
-      urlCode: urlCode ? "PRESENT" : "NULL",
-      urlState: urlState ? "PRESENT" : "NULL",
-      routerCode: routerCode ? "PRESENT" : "NULL",
-      routerState: routerState ? "PRESENT" : "NULL",
-      provider,
-    });
-
-    if (code && state && provider) {
-      if (userData && userData.id) {
-        console.log("Processing OAuth callback with user:", userData.id);
-        processOAuthCallback(provider, { code, state });
-      } else {
-        console.log("Waiting for user data before processing OAuth callback");
-      }
-    }
-
-    // Only clean up URL if we have parameters to clean
-    if (urlCode || urlState || routerCode || routerState) {
-      console.log("Cleaning up URL params");
-      // Store the fact that we're in a callback so we don't lose context
-      sessionStorage.setItem("oauth_callback_processing", "true");
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location, navigate, userData]);
-
-  const processOAuthCallback = async (provider, params) => {
-    try {
-      console.log("Processing OAuth callback:", provider, params);
-      setLoading(true);
-      setError(null);
-
-      const providerObj = calendarProviders.find((p) => p.id === provider);
-      setSelectedProvider(providerObj);
-
-      console.log(
-        "Calling handleCalendarCallback with:",
-        provider,
-        params,
-        userData.id
-      );
-      const result = await handleCalendarCallback(
-        provider,
-        params,
-        userData.id
-      );
-      console.log("OAuth callback result:", result);
-
-      if (!result || !result.calendars) {
-        throw new Error("Failed to get calendars from provider");
-      }
-
-      const calendarsWithSelection = result.calendars.map((cal) => ({
-        ...cal,
-        selected: true,
-      }));
-      setConnectedCalendars(calendarsWithSelection);
-
-      setStep("configure");
-      localStorage.removeItem("calendarAuthProvider");
-      // Clean up the callback processing flag
-      sessionStorage.removeItem("oauth_callback_processing");
-    } catch (err) {
-      console.error("Error processing OAuth callback:", err);
-      setError(`Failed to connect to calendar service: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // This component doesn't need to handle OAuth callback anymore
+    // It will be handled by the Calendar.jsx component
+  }, []);
 
   const finishIntegration = async () => {
     try {
@@ -161,15 +62,15 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         (cal) => cal.selected
       );
 
-      if (!userData || !userData.id) {
+      if (!user || !user.id) {
         throw new Error("No user found");
       }
 
-      console.log("Saving selected calendars for user:", userData.id);
+      console.log("Saving selected calendars for user:", user.id);
       console.log("Selected calendars:", selectedCalendars);
 
       // Save the selected calendars
-      await saveSelectedCalendars(userData.id, selectedCalendars);
+      await saveSelectedCalendars(user.id, selectedCalendars);
 
       const enrichedCalendars = selectedCalendars.map((cal) => ({
         ...cal,
@@ -187,25 +88,30 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
     }
   };
 
-  const authorizeWithProvider = (provider) => {
-    try {
-      setLoading(true);
-      setError(null);
+const authorizeWithProvider = async (provider) => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      console.log("Authorizing with provider:", provider.id);
-      localStorage.setItem("calendarAuthProvider", provider.id);
+    console.log("Authorizing with provider:", provider.id);
 
-      const authUrl = initiateCalendarAuth(provider.id);
-      console.log("Generated auth URL:", authUrl);
+    // Generate auth URL
+    const authUrl = await initiateCalendarAuth(provider.id);
 
-      // Redirect to the authorization URL
-      window.location.href = authUrl;
-    } catch (err) {
-      console.error("Error initiating authorization:", err);
-      setError(`Failed to connect to ${provider.name}: ${err.message}`);
-      setLoading(false);
+    if (!authUrl) {
+      throw new Error("Failed to generate authorization URL");
     }
-  };
+
+    console.log("Redirecting to authorization URL");
+
+    // Redirect to the authorization URL
+    window.location.href = authUrl;
+  } catch (err) {
+    console.error("Error initiating authorization:", err);
+    setError(`Failed to connect to ${provider.name}: ${err.message}`);
+    setLoading(false);
+  }
+};
 
   const toggleCalendarSelection = (calendarId) => {
     setConnectedCalendars(
@@ -307,14 +213,14 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         <button
           className="px-4 py-2 bg-primary text-white rounded-md flex items-center"
           onClick={() => authorizeWithProvider(selectedProvider)}
-          disabled={loading || !userData}
+          disabled={loading || !user}
         >
           {loading ? (
             <>
               <span className="mr-2">Connecting...</span>
               <Loader size={16} className="animate-spin" />
             </>
-          ) : !userData ? (
+          ) : !user ? (
             <>Loading user data...</>
           ) : (
             <>Connect to {selectedProvider.name}</>
@@ -422,24 +328,6 @@ const CalendarIntegration = ({ onClose, onSuccess }) => {
         <button className="text-gray-400 hover:text-gray-600" onClick={onClose}>
           <X size={20} />
         </button>
-      </div>
-
-      {/* Debug info */}
-      <div className="mb-4 p-2 border border-blue-300 bg-blue-50 rounded text-xs">
-        <strong>Debug Info:</strong>
-        <br />
-        User ID: {userData?.id || "Not loaded"}
-        <br />
-        URL Search Params: {window.location.search || "NONE"}
-        <br />
-        Provider:{" "}
-        {selectedProvider?.id ||
-          localStorage.getItem("calendarAuthProvider") ||
-          "None selected"}
-        <br />
-        Step: {step}
-        <br />
-        Error: {error || "None"}
       </div>
 
       {step === "select" && renderSelectStep()}

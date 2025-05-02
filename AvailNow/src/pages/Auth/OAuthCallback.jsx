@@ -1,3 +1,4 @@
+// src/pages/Auth/OAuthCallback.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -9,9 +10,20 @@ const OAuthCallback = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      
       try {
-        // Process the OAuth callback
+        // Check if this is a calendar OAuth callback or auth callback
+        const callbackType = sessionStorage.getItem("oauth_callback_type");
+        const isCalendarCallback = callbackType === "calendar";
+
+        // If it's a calendar callback, just redirect to calendar page
+        // The actual OAuth processing will happen there
+        if (isCalendarCallback) {
+          // Keep the URL params for processing in the Calendar component
+          navigate("/calendar", { replace: false });
+          return;
+        }
+
+        // Otherwise, this is a regular auth callback - process the auth
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -19,16 +31,8 @@ const OAuthCallback = () => {
         }
 
         if (data?.session) {
-          // Store a flag in sessionStorage to indicate which callback is being processed
-          const previousCallback = sessionStorage.getItem(
-            "oauth_callback_type"
-          );
-
-          if (previousCallback === "calendar") {
-            navigate("/calendar", { replace: true });
-          } else {
-            navigate("/", { replace: true });
-          }
+          // Successfully authenticated
+          navigate("/", { replace: true });
         } else {
           throw new Error("No session detected during OAuth callback");
         }

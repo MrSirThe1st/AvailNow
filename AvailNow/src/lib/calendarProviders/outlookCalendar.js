@@ -1,67 +1,92 @@
 import { supabase } from "../supabase";
+import authService from "../authService";
 
-// Microsoft OAuth configuration
 const OUTLOOK_CLIENT_ID = import.meta.env.VITE_OUTLOOK_CLIENT_ID;
 const OUTLOOK_CLIENT_SECRET = import.meta.env.VITE_OUTLOOK_CLIENT_SECRET;
 const REDIRECT_URI =
   import.meta.env.VITE_OUTLOOK_REDIRECT_URI ||
-  `${window.location.origin}/auth/callback`;
+  `${window.location.origin}/calendar`;
 
 /**
- * Initiate Microsoft OAuth flow for calendar access
- * @returns {string} Authorization URL to redirect the user to
+ * Initiate Microsoft OAuth flow for calendar access with PKCE
+ * @returns {Promise<string>} Authorization URL to redirect the user to
  */
-export const initiateOutlookAuth = () => {
-  // Generate a random state value for security
-  const state = Math.random().toString(36).substring(2);
-  sessionStorage.setItem("outlook_auth_state", state);
+export const initiateOutlookAuth = async () => {
+  console.log("Starting Outlook auth process with PKCE");
+
+  // Generate PKCE code verifier (random string of specified length)
+  const codeVerifier = authService.generateRandomString(128);
+
+  // Generate state parameter for security
+  const state = authService.generateRandomString(32);
+
+  // Store code verifier and state in localStorage for later use
+  localStorage.setItem("outlook_code_verifier", codeVerifier);
+  localStorage.setItem("outlook_auth_state", state);
+  localStorage.setItem("calendarAuthProvider", "outlook");
+
+  // Generate code challenge from verifier using SHA-256
+  const codeChallenge = await authService.generateCodeChallenge(codeVerifier);
+  console.log("Generated code challenge from verifier");
+
+  // Save current auth state
+  await authService.saveAuthState();
 
   // Define OAuth scope for Microsoft Calendar
   const scope = encodeURIComponent("Calendars.Read User.Read offline_access");
 
-  // Build Microsoft OAuth URL
-  const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${OUTLOOK_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}&response_mode=query`;
+  // Build Microsoft OAuth URL with PKCE
+  const authUrl =
+    `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` +
+    `?client_id=${OUTLOOK_CLIENT_ID}` +
+    `&response_type=code` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&scope=${scope}` +
+    `&state=${state}` +
+    `&code_challenge=${codeChallenge}` +
+    `&code_challenge_method=S256` +
+    `&response_mode=query`;
 
+  console.log(
+    "Generated Outlook auth URL with PKCE (redacted):",
+    authUrl.replace(OUTLOOK_CLIENT_ID, "[CLIENT_ID]")
+  );
 
-  console.log("Generated Outlook Auth URL:", authUrl);
   return authUrl;
 };
 
 /**
- * Handle Microsoft OAuth callback
+ * Handle Microsoft OAuth callback with PKCE
  * @param {string} code - Authorization code from OAuth redirect
  * @param {string} state - State parameter for verification
  * @param {string} userId - User ID to associate with this integration
  * @returns {Promise<Object>} Connection response with tokens and calendars
  */
 export const handleOutlookCallback = async (code, state, userId) => {
-  console.log("Handling Outlook callback with:", {
-    code: code ? "PRESENT" : "MISSING",
-    state: state ? "PRESENT" : "MISSING",
-    userId,
-  });
+  console.log("Handling Outlook callback with PKCE flow");
 
   // Verify state parameter
-  const savedState = sessionStorage.getItem("outlook_auth_state");
-  console.log("State comparison:", {
-    savedState: savedState || "NULL",
-    receivedState: state || "NULL",
-  });
-
+  const savedState = localStorage.getItem("outlook_auth_state");
   if (savedState && state && savedState !== state) {
-    console.warn("State mismatch detected, but continuing for debugging");
+    console.warn("State mismatch detected");
+    // Continue for debugging but log the issue
   }
 
-  // Clean up state
-  sessionStorage.getItem("outlook_auth_state");
+  // Get the code verifier that was stored
+  const codeVerifier = localStorage.getItem("outlook_code_verifier");
+  if (!codeVerifier) {
+    throw new Error(
+      "Code verifier not found. Authentication flow was interrupted."
+    );
+  }
 
-  console.log("Exchanging code for tokens...");
-  const tokenResponse = await fetchOutlookTokens(code);
-  console.log("Token response received:", {
-    access_token: tokenResponse.access_token ? "PRESENT" : "MISSING",
-    refresh_token: tokenResponse.refresh_token ? "PRESENT" : "MISSING",
-    expires_in: tokenResponse.expires_in,
-  });
+  // Clean up stored values
+  localStorage.removeItem("outlook_auth_state");
+  localStorage.removeItem("outlook_code_verifier");
+
+  // Exchange code for tokens using PKCE flow
+  console.log("Exchanging code for tokens with PKCE verification");
+  const tokenResponse = await fetchOutlookTokensWithPKCE(code, codeVerifier);
 
   if (!tokenResponse.access_token) {
     throw new Error("Failed to get access token from Microsoft");
@@ -72,9 +97,8 @@ export const handleOutlookCallback = async (code, state, userId) => {
   await storeOutlookTokens(userId, tokenResponse);
 
   // Fetch user's calendars
-  console.log("Fetching calendars with access token...");
+  console.log("Fetching calendars with access token");
   const calendars = await fetchOutlookCalendars(tokenResponse.access_token);
-  console.log("Fetched calendars:", calendars.length);
 
   return {
     success: true,
@@ -85,31 +109,26 @@ export const handleOutlookCallback = async (code, state, userId) => {
 };
 
 /**
- * Exchange authorization code for access and refresh tokens
+ * Exchange authorization code for tokens using PKCE flow
  * @param {string} code - Authorization code from OAuth redirect
+ * @param {string} codeVerifier - PKCE code verifier
  * @returns {Promise<Object>} Token response
  */
-const fetchOutlookTokens = async (code) => {
-  console.log("Token exchange parameters:", {
-    client_id: OUTLOOK_CLIENT_ID ? "[PRESENT]" : "[MISSING]",
-    redirect_uri: REDIRECT_URI,
-    code: code ? "[PRESENT]" : "[MISSING]",
-    code_length: code ? code.length : 0,
-  });
+const fetchOutlookTokensWithPKCE = async (code, codeVerifier) => {
+  console.log("Token exchange with PKCE verification");
 
   const params = new URLSearchParams();
   params.append("client_id", OUTLOOK_CLIENT_ID);
-  params.append("client_secret", OUTLOOK_CLIENT_SECRET);
+  params.append("scope", "Calendars.Read User.Read offline_access");
   params.append("code", code);
   params.append("redirect_uri", REDIRECT_URI);
   params.append("grant_type", "authorization_code");
+  params.append("code_verifier", codeVerifier);
 
-  console.log("Token request params:", {
-    client_id: OUTLOOK_CLIENT_ID ? "PRESENT" : "MISSING",
-    client_secret: OUTLOOK_CLIENT_SECRET ? "PRESENT" : "MISSING",
-    code: code ? "PRESENT" : "MISSING",
-    redirect_uri: REDIRECT_URI,
-  });
+  // Only include client secret if available (should be kept on server in production)
+  if (OUTLOOK_CLIENT_SECRET) {
+    params.append("client_secret", OUTLOOK_CLIENT_SECRET);
+  }
 
   try {
     const response = await fetch(
@@ -134,15 +153,11 @@ const fetchOutlookTokens = async (code) => {
     }
 
     const data = await response.json();
-    console.log("Token success response:", {
-      access_token: data.access_token ? "PRESENT" : "MISSING",
-      refresh_token: data.refresh_token ? "PRESENT" : "MISSING",
-      expires_in: data.expires_in,
-    });
+    console.log("Token exchange successful");
 
     return data;
   } catch (error) {
-    console.error("Error fetching tokens:", error);
+    console.error("Error during token exchange:", error);
     throw error;
   }
 };

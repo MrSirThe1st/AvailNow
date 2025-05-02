@@ -10,7 +10,6 @@ export const CALENDAR_PROVIDERS = {
   APPLE: "apple",
   CALENDLY: "calendly",
 };
-
 /**
  * Initiate OAuth flow for a calendar provider
  * @param {string} provider - Calendar provider (e.g., "google", "outlook")
@@ -24,6 +23,13 @@ export const initiateCalendarAuth = (provider) => {
 
   // Also store a flag in sessionStorage to indicate this is a calendar callback
   sessionStorage.setItem("oauth_callback_type", "calendar");
+
+  // Save current session to restore after redirect
+  supabase.auth.getSession().then(({ data }) => {
+    if (data?.session?.access_token) {
+      localStorage.setItem("temp_auth_session", data.session.access_token);
+    }
+  });
 
   switch (provider) {
     case CALENDAR_PROVIDERS.GOOGLE:
@@ -196,29 +202,26 @@ export const fetchCalendarEvents = async (
     const tokenExpiresAt = new Date(integration.expires_at);
 
     // If token expires in less than 5 minutes, refresh it
-     if (tokenExpiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
-       console.log("Access token expired or about to expire, refreshing...");
+    if (tokenExpiresAt <= new Date(now.getTime() + 5 * 60 * 1000)) {
+      console.log("Access token expired or about to expire, refreshing...");
 
-       if (
-         provider === CALENDAR_PROVIDERS.GOOGLE &&
-         integration.refresh_token
-       ) {
-         const newTokenData = await googleCalendar.refreshGoogleToken(
-           integration.refresh_token
-         );
-         integration.access_token = newTokenData.access_token;
-       } else if (
-         provider === CALENDAR_PROVIDERS.OUTLOOK &&
-         integration.refresh_token
-       ) {
-         const newTokenData = await outlookCalendar.refreshOutlookToken(
-           integration.refresh_token
-         );
-         integration.access_token = newTokenData.access_token;
-       } else {
-         throw new Error("Unable to refresh token");
-       }
-     }
+      if (provider === CALENDAR_PROVIDERS.GOOGLE && integration.refresh_token) {
+        const newTokenData = await googleCalendar.refreshGoogleToken(
+          integration.refresh_token
+        );
+        integration.access_token = newTokenData.access_token;
+      } else if (
+        provider === CALENDAR_PROVIDERS.OUTLOOK &&
+        integration.refresh_token
+      ) {
+        const newTokenData = await outlookCalendar.refreshOutlookToken(
+          integration.refresh_token
+        );
+        integration.access_token = newTokenData.access_token;
+      } else {
+        throw new Error("Unable to refresh token");
+      }
+    }
 
     // Now fetch events based on the provider
     switch (provider) {

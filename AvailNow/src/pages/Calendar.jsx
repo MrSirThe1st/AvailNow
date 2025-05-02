@@ -1,10 +1,10 @@
-// src/pages/Calendar.jsx - Updated to fix Outlook auth issues
-
-import React, { useState, useEffect } from "react";
-import { Loader } from "lucide-react";
-import { useLocation } from "react-router-dom";
+// src/pages/Calendar.jsx
+import React, { useState, useEffect, useCallback } from "react";
+import { Loader, AlertTriangle } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
+import authService from "../lib/authService";
 import {
   handleCalendarCallback,
   CALENDAR_PROVIDERS,
@@ -15,132 +15,116 @@ import { supabase } from "../lib/supabase";
 const Calendar = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [calendarsList, setCalendarsList] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
-  const [businessHours, setBusinessHours] = useState({
-    startTime: "09:00",
-    endTime: "17:00",
-    workingDays: [1, 2, 3, 4, 5],
-  });
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [callbackProcessing, setCallbackProcessing] = useState(false);
   const [callbackError, setCallbackError] = useState(null);
 
-  // Process OAuth callback if present in URL - Improved version
+  // Attempt to restore session if needed
   useEffect(() => {
+    // Restore auth session if needed
+    const restoreSession = async () => {
+      if (!user) {
+        const restored = await authService.restoreAuthState();
+        if (restored) {
+          console.log("Successfully restored auth session");
+        }
+      }
+    };
+
+    restoreSession();
+  }, [user]);
+
+  // Process OAuth callback if present in URL
+useEffect(() => {
+  const processOAuthCallback = async () => {
+    // Get URL parameters
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
-    const provider = localStorage.getItem("calendarAuthProvider");
-    const isProcessingCallback = sessionStorage.getItem("processing_callback");
 
-    // Prevent double-processing and ensure we have all required parameters
-    if (code && state && provider && user?.id && !isProcessingCallback) {
-      // Set flag to prevent double processing
-      sessionStorage.setItem("processing_callback", "true");
+    // Get provider from localStorage
+    const provider = localStorage.getItem("calendarAuthProvider");
+
+    // Only process if we have all required parameters
+    if (code && state && provider && user?.id) {
       setCallbackProcessing(true);
 
-      // Clear URL parameters to prevent accidental reuse
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Clean URL parameters to prevent reprocessing
+      navigate("/calendar", { replace: true });
 
-      const processOAuthCallback = async () => {
-        try {
-          console.log(`Processing ${provider} OAuth callback...`);
+      try {
+        console.log(`Processing ${provider} OAuth callback...`);
 
-          // Process the callback
-          const result = await handleCalendarCallback(
-            provider,
-            { code, state },
-            user.id
-          );
+        // Process the callback
+        const result = await handleCalendarCallback(
+          provider,
+          { code, state },
+          user.id
+        );
 
-          console.log("OAuth callback successful:", result);
+        console.log("OAuth callback successful:", result);
 
-          // Update connected calendars state
-          if (result && result.calendars) {
-            // Add the integration to connected calendars
-            const newIntegration = {
-              id: `${provider}-integration-${Date.now()}`,
-              provider: provider,
-              user_id: user.id,
-              created_at: new Date().toISOString(),
-              access_token: "present", // Don't store actual token in state
-              expires_at: new Date(Date.now() + 3600000).toISOString(),
-            };
+        // Update connected calendars state
+        if (result && result.calendars) {
+          // Add the integration to connected calendars
+          const newIntegration = {
+            id: `${provider}-integration-${Date.now()}`,
+            provider: provider,
+            user_id: user.id,
+            created_at: new Date().toISOString(),
+            calendar_id: "primary",
+          };
 
-            setConnectedCalendars((prev) => {
-              // Avoid duplicates
-              if (!prev.some((cal) => cal.provider === provider)) {
-                return [...prev, newIntegration];
-              }
-              return prev;
-            });
+          setConnectedCalendars((prev) => {
+            // Avoid duplicates
+            if (!prev.some((cal) => cal.provider === provider)) {
+              return [...prev, newIntegration];
+            }
+            return prev;
+          });
 
-            // Add the calendars to the list
-            const calendarsWithSelection = result.calendars.map((cal) => ({
-              ...cal,
-              selected: true,
-            }));
-
-            setCalendarsList((prev) => {
-              // Merge with existing calendars, avoiding duplicates
-              const existingIds = prev.map((cal) => cal.id);
-              const newCals = calendarsWithSelection.filter(
-                (cal) => !existingIds.includes(cal.id)
-              );
-              return [...prev, ...newCals];
-            });
-          }
-
-          // Clean up
-          localStorage.removeItem("calendarAuthProvider");
-          setCallbackError(null);
-        } catch (err) {
-          console.error("Error processing OAuth callback:", err);
-          setCallbackError(
-            "Failed to connect calendar: " + (err.message || "Unknown error")
-          );
-        } finally {
-          setCallbackProcessing(false);
-          sessionStorage.removeItem("processing_callback");
+          // Add calendars to the list
+          setCalendarsList((prev) => {
+            const existingIds = prev.map((cal) => cal.id);
+            const newCals = result.calendars
+              .filter((cal) => !existingIds.includes(cal.id))
+              .map((cal) => ({
+                ...cal,
+                selected: true,
+              }));
+            return [...prev, ...newCals];
+          });
         }
-      };
 
-      // Execute immediately
-      processOAuthCallback();
+        setCallbackError(null);
+      } catch (err) {
+        console.error("Error processing OAuth callback:", err);
+        setCallbackError(
+          "Failed to connect calendar: " + (err.message || "Unknown error")
+        );
+      } finally {
+        setCallbackProcessing(false);
+
+        // Clean up
+        localStorage.removeItem("calendarAuthProvider");
+      }
     }
+  };
 
-    // If callback processing flag exists but no code/state, clean it up
-    if (!code && !state && isProcessingCallback) {
-      sessionStorage.removeItem("processing_callback");
-    }
-  }, [user, location]);
+  processOAuthCallback();
+}, [user, navigate]);
 
-  // Load connected calendars on mount - improved to handle session issues
+  // Load connected calendars on mount
   useEffect(() => {
     if (user) {
       loadConnectedCalendars();
-    } else {
-      // Check if we have a session in localStorage and try to restore it
-      const savedSession = localStorage.getItem("temp_auth_session");
-      if (savedSession) {
-        supabase.auth
-          .setSession({
-            access_token: savedSession,
-            refresh_token: null,
-          })
-          .then(({ data, error }) => {
-            if (!error && data.session) {
-              console.log("Successfully restored session from localStorage");
-              localStorage.removeItem("temp_auth_session");
-            }
-          });
-      }
     }
   }, [user]);
 
@@ -152,7 +136,6 @@ const Calendar = () => {
 
       console.log("Loading connected calendars");
 
-      // Now try with the user ID filter
       if (user?.id) {
         const { data: userIntegrations, error: userError } = await supabase
           .from("calendar_integrations")
@@ -173,7 +156,6 @@ const Calendar = () => {
 
             for (const integration of userIntegrations) {
               try {
-                // You would need to implement this function
                 const calendarsForProvider = await fetchCalendarsForProvider(
                   user.id,
                   integration.provider
@@ -195,14 +177,7 @@ const Calendar = () => {
             }
           } else {
             console.log("No connected calendars found in database");
-
-            // Check if we have calendars from OAuth flow (stored in state)
-            if (calendarsList.length > 0) {
-              console.log("Using calendars from OAuth flow instead");
-              // We already have calendars in state
-            } else {
-              setConnectedCalendars([]);
-            }
+            setConnectedCalendars([]);
           }
         }
       }
@@ -214,9 +189,7 @@ const Calendar = () => {
     }
   };
 
-  // Rest of the component remains the same...
-
-  // Placeholder for the function to fetch calendars for a specific provider
+  // Placeholder function to fetch calendars for a specific provider
   const fetchCalendarsForProvider = async (userId, provider) => {
     // In a real implementation, you would call your calendar service here
     // For now, return mock data
@@ -288,6 +261,16 @@ const Calendar = () => {
     }
   };
 
+  // If user is not authenticated, show loading or redirect
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <Loader className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-gray-600">Loading user session...</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* OAuth Callback Status */}
@@ -302,13 +285,22 @@ const Calendar = () => {
 
       {callbackError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-700">{callbackError}</p>
-          <button
-            className="mt-2 text-sm text-blue-600 underline"
-            onClick={() => setCallbackError(null)}
-          >
-            Dismiss
-          </button>
+          <div className="flex items-start">
+            <AlertTriangle
+              size={24}
+              className="mr-3 text-red-500 flex-shrink-0"
+            />
+            <div>
+              <p className="text-red-700 font-medium">Connection Error</p>
+              <p className="text-red-600">{callbackError}</p>
+              <button
+                className="mt-2 text-sm text-blue-600 underline"
+                onClick={() => setCallbackError(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -374,7 +366,6 @@ const Calendar = () => {
             <CalendarIntegration
               onClose={() => setShowCalendarModal(false)}
               onSuccess={handleAddCalendar}
-              user={user}
             />
           </div>
         </div>
