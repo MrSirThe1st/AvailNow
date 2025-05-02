@@ -21,33 +21,13 @@ export function SupabaseAuthProvider({ children }) {
     });
 
     // Listen for auth changes
-     const searchParams = new URLSearchParams(window.location.search);
-     const token =
-       searchParams.get("token") || searchParams.get("access_token");
-     const type = searchParams.get("type");
-
-     if (token && type === "recovery") {
-       setLoading(true);
-       // This will update the session automatically
-       supabase.auth.onAuthStateChange((event, session) => {
-         if (event === "PASSWORD_RECOVERY") {
-           console.log("Password recovery flow detected");
-           setSession(session);
-           setUser(session?.user || null);
-           setLoading(false);
-         }
-       });
-     }
-
-     // Continue listening for auth changes
-     const {
-       data: { subscription },
-     } = supabase.auth.onAuthStateChange((_event, session) => {
-       setSession(session);
-       setUser(session?.user || null);
-       setLoading(false);
-     });
-
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user || null);
+      setLoading(false);
+    });
 
     return () => subscription.unsubscribe();
   }, []);

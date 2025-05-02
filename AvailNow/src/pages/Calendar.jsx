@@ -1,4 +1,4 @@
-// src/pages/Calendar.jsx - Update to support Outlook integration
+// src/pages/Calendar.jsx - Updated to fix Outlook auth issues
 
 import React, { useState, useEffect } from "react";
 import { Loader } from "lucide-react";
@@ -13,14 +13,11 @@ import { useAuth } from "../context/SupabaseAuthContext";
 import { supabase } from "../lib/supabase";
 
 const Calendar = () => {
-  // Get the Supabase user from our auth context
   const { user } = useAuth();
   const location = useLocation();
 
   const [calendarSettings, setCalendarSettings] = useState(null);
-  // Store integration objects for the CalendarView
   const [connectedCalendars, setConnectedCalendars] = useState([]);
-  // Store actual calendar objects with calendar info
   const [calendarsList, setCalendarsList] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [businessHours, setBusinessHours] = useState({
@@ -34,22 +31,27 @@ const Calendar = () => {
   const [callbackProcessing, setCallbackProcessing] = useState(false);
   const [callbackError, setCallbackError] = useState(null);
 
-  // Process OAuth callback if present in URL
+  // Process OAuth callback if present in URL - Improved version
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
     const provider = localStorage.getItem("calendarAuthProvider");
+    const isProcessingCallback = sessionStorage.getItem("processing_callback");
 
-    // Only process if parameters exist, user is available, and not already processing
-    if (code && state && provider && user?.id && !callbackProcessing) {
+    // Prevent double-processing and ensure we have all required parameters
+    if (code && state && provider && user?.id && !isProcessingCallback) {
+      // Set flag to prevent double processing
+      sessionStorage.setItem("processing_callback", "true");
       setCallbackProcessing(true);
 
-      // Clear URL parameters IMMEDIATELY to prevent accidental reuse
+      // Clear URL parameters to prevent accidental reuse
       window.history.replaceState({}, document.title, window.location.pathname);
 
       const processOAuthCallback = async () => {
         try {
+          console.log(`Processing ${provider} OAuth callback...`);
+
           // Process the callback
           const result = await handleCalendarCallback(
             provider,
@@ -57,8 +59,47 @@ const Calendar = () => {
             user.id
           );
 
-          // Rest of your callback handling...
+          console.log("OAuth callback successful:", result);
+
+          // Update connected calendars state
+          if (result && result.calendars) {
+            // Add the integration to connected calendars
+            const newIntegration = {
+              id: `${provider}-integration-${Date.now()}`,
+              provider: provider,
+              user_id: user.id,
+              created_at: new Date().toISOString(),
+              access_token: "present", // Don't store actual token in state
+              expires_at: new Date(Date.now() + 3600000).toISOString(),
+            };
+
+            setConnectedCalendars((prev) => {
+              // Avoid duplicates
+              if (!prev.some((cal) => cal.provider === provider)) {
+                return [...prev, newIntegration];
+              }
+              return prev;
+            });
+
+            // Add the calendars to the list
+            const calendarsWithSelection = result.calendars.map((cal) => ({
+              ...cal,
+              selected: true,
+            }));
+
+            setCalendarsList((prev) => {
+              // Merge with existing calendars, avoiding duplicates
+              const existingIds = prev.map((cal) => cal.id);
+              const newCals = calendarsWithSelection.filter(
+                (cal) => !existingIds.includes(cal.id)
+              );
+              return [...prev, ...newCals];
+            });
+          }
+
+          // Clean up
           localStorage.removeItem("calendarAuthProvider");
+          setCallbackError(null);
         } catch (err) {
           console.error("Error processing OAuth callback:", err);
           setCallbackError(
@@ -66,18 +107,40 @@ const Calendar = () => {
           );
         } finally {
           setCallbackProcessing(false);
+          sessionStorage.removeItem("processing_callback");
         }
       };
 
       // Execute immediately
       processOAuthCallback();
     }
+
+    // If callback processing flag exists but no code/state, clean it up
+    if (!code && !state && isProcessingCallback) {
+      sessionStorage.removeItem("processing_callback");
+    }
   }, [user, location]);
 
-  // Load connected calendars on mount
+  // Load connected calendars on mount - improved to handle session issues
   useEffect(() => {
     if (user) {
       loadConnectedCalendars();
+    } else {
+      // Check if we have a session in localStorage and try to restore it
+      const savedSession = localStorage.getItem("temp_auth_session");
+      if (savedSession) {
+        supabase.auth
+          .setSession({
+            access_token: savedSession,
+            refresh_token: null,
+          })
+          .then(({ data, error }) => {
+            if (!error && data.session) {
+              console.log("Successfully restored session from localStorage");
+              localStorage.removeItem("temp_auth_session");
+            }
+          });
+      }
     }
   }, [user]);
 
@@ -150,6 +213,8 @@ const Calendar = () => {
       setIsLoading(false);
     }
   };
+
+  // Rest of the component remains the same...
 
   // Placeholder for the function to fetch calendars for a specific provider
   const fetchCalendarsForProvider = async (userId, provider) => {
@@ -301,24 +366,6 @@ const Calendar = () => {
         onAddCalendar={() => setShowCalendarModal(true)}
         user={user}
       />
-
-      {/* Debug Info */}
-      <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-600">
-        <strong>Debug Info:</strong>
-        <br />
-        URL Parameters: {window.location.search || "NONE"}
-        <br />
-        Provider in localStorage:{" "}
-        {localStorage.getItem("calendarAuthProvider") || "NONE"}
-        <br />
-        Connected Calendars: {connectedCalendars.length} (
-        {connectedCalendars.map((c) => c.provider).join(", ")})
-        <br />
-        Calendar List: {calendarsList.length} (
-        {calendarsList.map((c) => c.provider).join(", ")})
-        <br />
-        User ID: {user?.id || "Not loaded"}
-      </div>
 
       {/* Calendar Integration Modal */}
       {showCalendarModal && (

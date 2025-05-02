@@ -9,6 +9,7 @@ const OAuthCallback = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      
       try {
         // Process the OAuth callback
         const { data, error } = await supabase.auth.getSession();

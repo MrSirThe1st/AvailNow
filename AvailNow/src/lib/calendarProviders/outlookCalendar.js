@@ -14,7 +14,7 @@ const REDIRECT_URI =
 export const initiateOutlookAuth = () => {
   // Generate a random state value for security
   const state = Math.random().toString(36).substring(2);
-  localStorage.setItem("outlook_auth_state", state);
+  sessionStorage.setItem("outlook_auth_state", state);
 
   // Define OAuth scope for Microsoft Calendar
   const scope = encodeURIComponent("Calendars.Read User.Read offline_access");
@@ -42,7 +42,7 @@ export const handleOutlookCallback = async (code, state, userId) => {
   });
 
   // Verify state parameter
-  const savedState = localStorage.getItem("outlook_auth_state");
+  const savedState = sessionStorage.getItem("outlook_auth_state");
   console.log("State comparison:", {
     savedState: savedState || "NULL",
     receivedState: state || "NULL",
@@ -53,7 +53,7 @@ export const handleOutlookCallback = async (code, state, userId) => {
   }
 
   // Clean up state
-  localStorage.removeItem("outlook_auth_state");
+  sessionStorage.getItem("outlook_auth_state");
 
   console.log("Exchanging code for tokens...");
   const tokenResponse = await fetchOutlookTokens(code);
