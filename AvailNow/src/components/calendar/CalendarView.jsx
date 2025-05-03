@@ -42,6 +42,7 @@ const CalendarView = ({
   user,
   connectedCalendars = [],
   calendarsList = [],
+  activeCalendar, // Add activeCalendar prop
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -115,9 +116,11 @@ const CalendarView = ({
     return dates;
   }, [currentDate]);
 
-  // Load calendar events for the current month
+  // Load calendar events for the current month - Modified to only load active calendar
   const loadCalendarEvents = useCallback(async () => {
-    if (!user?.id || !connectedCalendars.length) {
+    if (!user?.id || !activeCalendar || connectedCalendars.length === 0) {
+      // Clear events if no active calendar
+      setCalendarEvents([]);
       return;
     }
 
@@ -131,36 +134,38 @@ const CalendarView = ({
       // Create array to hold all events
       let allEvents = [];
 
-      console.log("Fetching calendar events for connected calendars");
+      console.log("Fetching calendar events for active calendar:", activeCalendar);
 
-      // Get connected calendars with actual IDs
-      const calendarsToFetch = connectedCalendars.map((integration) => ({
-        id: integration.calendar_id || integration.id,
-        provider: integration.provider,
-      }));
+      // Get active calendar integration
+      const activeIntegration = connectedCalendars.find(
+        (cal) => cal.provider === activeCalendar
+      );
 
-      // Fetch events for each calendar
-      const eventsPromises = calendarsToFetch.map(async (calendar) => {
-        try {
-          return await fetchCalendarEvents(
-            user.id,
-            calendar.provider || "google",
-            "primary",
-            startDate,
-            endDate
-          );
-        } catch (err) {
-          console.error(
-            `Failed to fetch events for calendar ${calendar.id}:`,
-            err
-          );
-          return [];
-        }
-      });
+      if (!activeIntegration) {
+        console.log("No active calendar integration found");
+        setCalendarEvents([]);
+        return;
+      }
 
-      const eventArrays = await Promise.all(eventsPromises);
-      allEvents = eventArrays.flat();
-      console.log("Fetched real calendar events:", allEvents.length);
+      // Fetch events for the active calendar
+      try {
+        const events = await fetchCalendarEvents(
+          user.id,
+          activeCalendar,
+          "primary",
+          startDate,
+          endDate
+        );
+        allEvents = events || [];
+      } catch (err) {
+        console.error(
+          `Failed to fetch events for calendar ${activeCalendar}:`,
+          err
+        );
+        allEvents = [];
+      }
+
+      console.log(`Fetched ${allEvents.length} events from ${activeCalendar}`);
 
       // Sort events by start time
       allEvents.sort((a, b) => {
@@ -176,7 +181,7 @@ const CalendarView = ({
     } finally {
       setIsLoading(false);
     }
-  }, [connectedCalendars, user, getDateRange]);
+  }, [connectedCalendars, user, getDateRange, activeCalendar]);
 
   // Update the calendar grid when the month changes
   useEffect(() => {
@@ -184,12 +189,10 @@ const CalendarView = ({
     setCurrentMonthDates(dates);
   }, [currentDate, getDatesForCalendarView]);
 
-  // Load calendar events when date or connected calendars change
+  // Load calendar events when date, connected calendars, or active calendar changes
   useEffect(() => {
-    if (connectedCalendars.length > 0) {
-      loadCalendarEvents();
-    }
-  }, [currentDate, connectedCalendars, loadCalendarEvents]);
+    loadCalendarEvents();
+  }, [currentDate, connectedCalendars, loadCalendarEvents, activeCalendar]);
 
   // Update events for selected date when date is selected or events change
   useEffect(() => {
@@ -408,6 +411,15 @@ const CalendarView = ({
           </div>
         )}
 
+        {/* Active Calendar Indicator */}
+        {activeCalendar && (
+          <div className="mb-4 p-2 bg-gray-100 rounded-md text-sm">
+            <p className="font-medium">
+              Active Calendar: {activeCalendar === 'google' ? 'Google Calendar' : 'Microsoft Outlook'}
+            </p>
+          </div>
+        )}
+
         {/* Day headers */}
         <div className="grid grid-cols-7 mb-2">
           {DAYS_SHORT.map((day) => (
@@ -477,7 +489,8 @@ const CalendarView = ({
           <h3 className="text-lg font-semibold mb-2">Connected Calendars</h3>
           {connectedCalendars.length > 0 ? (
             <div className="space-y-2">
-              {connectedCalendars.map((calendar) => (
+              {/* Show active calendar if there is one, otherwise show all */}
+              {(activeCalendar ? connectedCalendars.filter(cal => cal.provider === activeCalendar) : connectedCalendars).map((calendar) => (
                 <div
                   key={calendar.id}
                   className={`flex items-center justify-between p-3 border rounded-md hover:border-primary hover:bg-${

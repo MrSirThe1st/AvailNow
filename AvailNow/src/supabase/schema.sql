@@ -119,6 +119,10 @@ ALTER TABLE public.calendar_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.availability_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.widget_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.widget_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.calendar_settings 
+
+
+ADD COLUMN IF NOT EXISTS active_calendar VARCHAR(20);
 
 -------------------------------------------------------------
 -- CREATE ROW LEVEL SECURITY POLICIES

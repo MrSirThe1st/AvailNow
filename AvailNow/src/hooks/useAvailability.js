@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { formatDate, doTimesOverlap } from "../lib/calendarUtils";
 import { AvailabilityAPI, CalendarAPI, WidgetAPI } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 /**
  * Custom hook to fetch and manage availability data
@@ -16,6 +17,7 @@ const useAvailability = (userId, date = new Date()) => {
   const [nextAvailable, setNextAvailable] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeCalendar, setActiveCalendar] = useState(null);
 
   // Get dates for calendar view
   const getDatesForCalendarView = (baseDate) => {
@@ -98,13 +100,17 @@ const useAvailability = (userId, date = new Date()) => {
         const slotStart = new Date(slot.start_time);
         const slotEnd = new Date(slot.end_time);
         return (
-          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) && slot.available
+          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) &&
+          slot.available
         );
       });
 
       // Slot is available if it's not overlapping with an event AND
       // either there's no availability slot for this time OR there is one that's marked as available
-      pattern.push(!hasEventOverlap && (availabilitySlots.length === 0 || hasAvailabilitySlot));
+      pattern.push(
+        !hasEventOverlap &&
+          (availabilitySlots.length === 0 || hasAvailabilitySlot)
+      );
     }
 
     return pattern;
@@ -164,9 +170,9 @@ const useAvailability = (userId, date = new Date()) => {
           return doTimesOverlap(slotStart, slotEnd, availStart, availEnd);
         });
 
-        const isAvailable = 
-          !hasEventOverlap && 
-          (dayAvailabilitySlots.length === 0 || 
+        const isAvailable =
+          !hasEventOverlap &&
+          (dayAvailabilitySlots.length === 0 ||
             (matchingAvailabilitySlot && matchingAvailabilitySlot.available));
 
         // Format time for display
@@ -179,7 +185,7 @@ const useAvailability = (userId, date = new Date()) => {
           time,
           available: isAvailable,
           start: slotStart,
-          end: slotEnd
+          end: slotEnd,
         };
 
         // Sort into morning and afternoon
@@ -206,6 +212,19 @@ const useAvailability = (userId, date = new Date()) => {
         setLoading(true);
         setError(null);
 
+        // First, get the active calendar preference
+        const { data: calendarSettings, error: settingsError } = await supabase
+          .from("calendar_settings")
+          .select("active_calendar")
+          .eq("user_id", userId)
+          .single();
+
+        if (settingsError && settingsError.code !== "PGRST116") {
+          console.warn("Error fetching calendar settings:", settingsError);
+        } else if (calendarSettings?.active_calendar) {
+          setActiveCalendar(calendarSettings.active_calendar);
+        }
+
         // Calculate date range for the current month view
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -218,28 +237,41 @@ const useAvailability = (userId, date = new Date()) => {
         // Track widget view for analytics
         await WidgetAPI.trackWidgetEvent(userId, "view");
 
-        // Fetch calendar events using the API service
+        // Fetch calendar events using the active calendar
         let events = [];
-        try {
-          events = await CalendarAPI.getCalendarEvents(userId, startDate, endDate);
-        } catch (err) {
-          console.warn("Error fetching calendar events:", err);
-          // Continue execution even if events fetch fails
+        if (activeCalendar) {
+          try {
+            events = await CalendarAPI.getCalendarEvents(
+              userId,
+              activeCalendar, // Use only the active calendar
+              "primary",
+              startDate,
+              endDate
+            );
+          } catch (err) {
+            console.warn("Error fetching calendar events:", err);
+          }
         }
 
         // Fetch availability slots using the API service
         let availabilitySlots = [];
         try {
-          availabilitySlots = await AvailabilityAPI.getAvailabilitySlots(userId, startDate, endDate);
+          availabilitySlots = await AvailabilityAPI.getAvailabilitySlots(
+            userId,
+            startDate,
+            endDate
+          );
         } catch (err) {
           console.warn("Error fetching availability slots:", err);
-          // Continue execution even if availability fetch fails
         }
 
-        // If no events found, use mock data for demonstration
-        const calendarEvents = events && events.length > 0 
-          ? events 
-          : generateMockEvents(startDate, endDate);
+        // Use the events or generate mock data if none found
+        const calendarEvents =
+          events && events.length > 0
+            ? events
+            : activeCalendar
+              ? []
+              : generateMockEvents(startDate, endDate);
 
         setCalendarEvents(calendarEvents);
 
@@ -253,7 +285,7 @@ const useAvailability = (userId, date = new Date()) => {
             return eventDate.toDateString() === dayData.date.toDateString();
           });
 
-          const dayAvailabilitySlots = availabilitySlots 
+          const dayAvailabilitySlots = availabilitySlots
             ? availabilitySlots.filter((slot) => {
                 const slotDate = new Date(slot.start_time);
                 return slotDate.toDateString() === dayData.date.toDateString();
@@ -262,13 +294,15 @@ const useAvailability = (userId, date = new Date()) => {
 
           // Generate availability pattern for this day
           const pattern = generateAvailabilityPattern(
-            dayData.date, 
-            dayEvents, 
+            dayData.date,
+            dayEvents,
             dayAvailabilitySlots
           );
 
           // Count available slots
-          const availableSlots = pattern.filter(isAvailable => isAvailable).length;
+          const availableSlots = pattern.filter(
+            (isAvailable) => isAvailable
+          ).length;
 
           return {
             ...dayData,
@@ -276,7 +310,7 @@ const useAvailability = (userId, date = new Date()) => {
             available: availableSlots > 0,
             availableSlots,
             events: dayEvents,
-            availabilitySlots: dayAvailabilitySlots
+            availabilitySlots: dayAvailabilitySlots,
           };
         });
 
@@ -295,11 +329,13 @@ const useAvailability = (userId, date = new Date()) => {
 
           // Set the first available day as selected by default
           setSelectedDate(availableDay.date);
-          setTimeSlots(generateTimeSlotsForDate(
-            availableDay.date, 
-            calendarEvents, 
-            availabilitySlots || []
-          ));
+          setTimeSlots(
+            generateTimeSlotsForDate(
+              availableDay.date,
+              calendarEvents,
+              availabilitySlots || []
+            )
+          );
         }
       } catch (err) {
         console.error("Error fetching availability data:", err);
@@ -310,11 +346,11 @@ const useAvailability = (userId, date = new Date()) => {
     };
 
     fetchAvailabilityData();
-  }, [userId, date]);
+  }, [userId, date, activeCalendar]);
 
   // Helper function to generate mock events if needed
   const generateMockEvents = (startDate, endDate) => {
-    console.log("Using mock data since no real events found");
+    console.log("Using mock data since no active calendar selected");
     const events = [];
     const currentDate = new Date(startDate);
 
@@ -344,7 +380,7 @@ const useAvailability = (userId, date = new Date()) => {
             end_time: end.toISOString(),
             all_day: false,
             calendar_id: "primary",
-            provider: "google",
+            provider: "mock",
           });
         }
       }
@@ -371,7 +407,8 @@ const useAvailability = (userId, date = new Date()) => {
     setSelectedDate: handleDateClick,
     timeSlots,
     nextAvailable,
-    generateTimeSlotsForDate
+    generateTimeSlotsForDate,
+    activeCalendar,
   };
 };
 

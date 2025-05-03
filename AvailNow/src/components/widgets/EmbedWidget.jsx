@@ -4,6 +4,7 @@ import { fetchCalendarEvents } from "../../lib/calendarService";
 import { getAvailabilityForDateRange } from "../../lib/widgetService";
 import { formatDate, doTimesOverlap } from "../../lib/calendarUtils";
 import { trackWidgetEvent } from "../../lib/widgetService";
+import { supabase } from "../../lib/supabase";
 
 // DateCellWithDotIndicator component for calendar cell display
 const DateCellWithDotIndicator = ({
@@ -11,16 +12,16 @@ const DateCellWithDotIndicator = ({
   availabilityPattern = [],
   isSelected = false,
   isInMonth = true,
-  onClick
+  onClick,
 }) => {
   // Calculate availability stats
   const totalSlots = availabilityPattern.length;
-  const availableSlots = availabilityPattern.filter(slot => slot).length;
+  const availableSlots = availabilityPattern.filter((slot) => slot).length;
   const hasAvailability = availableSlots > 0;
-  
+
   // Today indicator
   const isToday = new Date().toDateString() === date.toDateString();
-  
+
   // Style for date cell
   const cellStyle = {
     position: "relative",
@@ -32,9 +33,9 @@ const DateCellWithDotIndicator = ({
     opacity: !isInMonth ? 0.5 : 1,
     backgroundColor: isSelected ? "#EBF5FF" : "transparent",
     borderRadius: "4px",
-    border: isSelected ? "1px solid #0070f3" : "none"
+    border: isSelected ? "1px solid #0070f3" : "none",
   };
-  
+
   // Style for date number
   const dateNumberStyle = {
     display: "flex",
@@ -42,17 +43,17 @@ const DateCellWithDotIndicator = ({
     justifyContent: "center",
     height: "20px",
     fontWeight: isSelected ? "bold" : "normal",
-    color: !isInMonth ? "#9CA3AF" : isSelected ? "#0070f3" : "#1F2937"
+    color: !isInMonth ? "#9CA3AF" : isSelected ? "#0070f3" : "#1F2937",
   };
-  
+
   // Style for dot container
   const dotContainerStyle = {
     display: "flex",
     justifyContent: "center",
     gap: "2px",
-    marginTop: "2px"
+    marginTop: "2px",
   };
-  
+
   return (
     <div
       style={cellStyle}
@@ -60,22 +61,22 @@ const DateCellWithDotIndicator = ({
     >
       {/* Today indicator */}
       {isToday && (
-        <div style={{
-          position: "absolute",
-          top: "2px",
-          right: "2px",
-          width: "4px",
-          height: "4px",
-          backgroundColor: "#0070f3",
-          borderRadius: "50%"
-        }}></div>
+        <div
+          style={{
+            position: "absolute",
+            top: "2px",
+            right: "2px",
+            width: "4px",
+            height: "4px",
+            backgroundColor: "#0070f3",
+            borderRadius: "50%",
+          }}
+        ></div>
       )}
-      
+
       {/* Date number */}
-      <div style={dateNumberStyle}>
-        {date.getDate()}
-      </div>
-      
+      <div style={dateNumberStyle}>{date.getDate()}</div>
+
       {/* Horizontal dot indicator */}
       <div style={dotContainerStyle}>
         {availabilityPattern.slice(0, 5).map((isAvailable, index) => (
@@ -85,7 +86,7 @@ const DateCellWithDotIndicator = ({
               width: "3px",
               height: "3px",
               borderRadius: "50%",
-              backgroundColor: isAvailable ? "#10B981" : "#D1D5DB"
+              backgroundColor: isAvailable ? "#10B981" : "#D1D5DB",
             }}
           />
         ))}
@@ -119,6 +120,7 @@ const EmbedWidget = ({
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
   const [error, setError] = useState(null);
+  const [activeCalendar, setActiveCalendar] = useState(null);
 
   // Get styles
   const styles = createStyles(theme, accentColor, textColor, compact);
@@ -207,15 +209,17 @@ const EmbedWidget = ({
         const slotStart = new Date(slot.start_time);
         const slotEnd = new Date(slot.end_time);
         return (
-          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) && slot.available
+          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) &&
+          slot.available
         );
       });
 
       // Slot is available if it's not overlapping with an event AND
       // either there's no availability slot for this time OR there is one that's marked as available
-      const isAvailable = !hasEventOverlap && 
+      const isAvailable =
+        !hasEventOverlap &&
         (availabilitySlots.length === 0 || hasAvailabilitySlot);
-      
+
       pattern.push(isAvailable);
     }
 
@@ -277,9 +281,9 @@ const EmbedWidget = ({
         });
 
         // Determine if slot is available
-        const isAvailable = 
-          !hasEventOverlap && 
-          (dayAvailabilitySlots.length === 0 || 
+        const isAvailable =
+          !hasEventOverlap &&
+          (dayAvailabilitySlots.length === 0 ||
             (matchingAvailabilitySlot && matchingAvailabilitySlot.available));
 
         // Format time for display
@@ -292,7 +296,7 @@ const EmbedWidget = ({
           time,
           available: isAvailable,
           start: slotStart,
-          end: slotEnd
+          end: slotEnd,
         };
 
         // Sort into morning and afternoon
@@ -307,12 +311,28 @@ const EmbedWidget = ({
     return { morning: morningSlots, afternoon: afternoonSlots };
   };
 
-  // Fetch availability and calendar data for the widget
+  // Fetch active calendar preference and availability data
   useEffect(() => {
     const fetchAvailabilityData = async () => {
       try {
         setLoading(true);
         setError(null);
+
+        // First, get the active calendar preference from calendar_settings
+        if (userId) {
+          const { data: calendarSettings, error: settingsError } =
+            await supabase
+              .from("calendar_settings")
+              .select("active_calendar")
+              .eq("user_id", userId)
+              .single();
+
+          if (settingsError && settingsError.code !== "PGRST116") {
+            console.warn("Error fetching calendar settings:", settingsError);
+          } else if (calendarSettings?.active_calendar) {
+            setActiveCalendar(calendarSettings.active_calendar);
+          }
+        }
 
         // Calculate date range for the current month view
         const year = currentMonth.getFullYear();
@@ -332,38 +352,40 @@ const EmbedWidget = ({
         let realEvents = [];
         let realAvailabilitySlots = [];
 
-        if (userId) {
+        if (userId && activeCalendar) {
           try {
-            // Attempt to fetch real calendar events
+            // Fetch calendar events from the active calendar only
             const events = await fetchCalendarEvents(
-              userId, 
-              "google", // Default provider
-              "primary", // Default calendar ID
-              startDate, 
+              userId,
+              activeCalendar, // Use the active calendar provider
+              "primary",
+              startDate,
               endDate
             );
-            
+
             if (events && events.length > 0) {
               realEvents = events;
-              console.log("Fetched real calendar events:", events.length);
+              console.log(
+                `Fetched ${events.length} calendar events from ${activeCalendar}`
+              );
             }
-            
-            // Attempt to fetch real availability slots
+
+            // Fetch availability slots
             const availSlots = await getAvailabilityForDateRange(
               userId,
               startDate,
               endDate
             );
-            
+
             if (availSlots && availSlots.length > 0) {
               realAvailabilitySlots = availSlots;
-              console.log("Fetched real availability slots:", availSlots.length);
-            } else {
-              console.log("No availability slots found, using default available times");
+              console.log(
+                "Fetched real availability slots:",
+                availSlots.length
+              );
             }
           } catch (err) {
             console.warn("Error fetching real data:", err);
-            // Continue with empty arrays (all times available)
           }
         }
 
@@ -380,7 +402,7 @@ const EmbedWidget = ({
             return eventDate.toDateString() === dayData.date.toDateString();
           });
 
-          const dayAvailabilitySlots = realAvailabilitySlots 
+          const dayAvailabilitySlots = realAvailabilitySlots
             ? realAvailabilitySlots.filter((slot) => {
                 const slotDate = new Date(slot.start_time);
                 return slotDate.toDateString() === dayData.date.toDateString();
@@ -389,13 +411,15 @@ const EmbedWidget = ({
 
           // Generate availability pattern for this day
           const pattern = generateAvailabilityPattern(
-            dayData.date, 
-            dayEvents, 
+            dayData.date,
+            dayEvents,
             dayAvailabilitySlots
           );
 
           // Count available slots
-          const availableSlots = pattern.filter(isAvailable => isAvailable).length;
+          const availableSlots = pattern.filter(
+            (isAvailable) => isAvailable
+          ).length;
 
           return {
             ...dayData,
@@ -403,7 +427,7 @@ const EmbedWidget = ({
             available: availableSlots > 0,
             availableSlots,
             events: dayEvents,
-            availabilitySlots: dayAvailabilitySlots
+            availabilitySlots: dayAvailabilitySlots,
           };
         });
 
@@ -422,11 +446,13 @@ const EmbedWidget = ({
 
           // Set the first available day as selected by default
           setSelectedDate(availableDay.date);
-          setTimeSlots(generateTimeSlotsForDate(
-            availableDay.date, 
-            realEvents, 
-            realAvailabilitySlots
-          ));
+          setTimeSlots(
+            generateTimeSlotsForDate(
+              availableDay.date,
+              realEvents,
+              realAvailabilitySlots
+            )
+          );
         }
       } catch (err) {
         console.error("Error fetching availability:", err);
@@ -437,7 +463,7 @@ const EmbedWidget = ({
     };
 
     fetchAvailabilityData();
-  }, [currentMonth, userId]);
+  }, [currentMonth, userId, activeCalendar]);
 
   // Format date in a readable way
   const formatDateForDisplay = (date) => {
@@ -448,7 +474,9 @@ const EmbedWidget = ({
   // Handle date selection
   const handleDateClick = (date) => {
     setSelectedDate(date);
-    setTimeSlots(generateTimeSlotsForDate(date, calendarEvents, availabilitySlots));
+    setTimeSlots(
+      generateTimeSlotsForDate(date, calendarEvents, availabilitySlots)
+    );
   };
 
   // Handle booking click
@@ -457,7 +485,7 @@ const EmbedWidget = ({
     if (userId) {
       trackWidgetEvent(userId, "booking");
     }
-    
+
     // In a real implementation, this would redirect to a booking page or show a form
     alert(
       `Booking for ${formatDateForDisplay(new Date(selectedDate))} at ${slot.time}`
@@ -575,10 +603,10 @@ const EmbedWidget = ({
               if (userId) {
                 trackWidgetEvent(userId, "click");
               }
-              
+
               alert(
                 `Booking appointment on ${formatDateForDisplay(new Date(selectedDate))}`
-              )
+              );
             }}
           >
             BOOK

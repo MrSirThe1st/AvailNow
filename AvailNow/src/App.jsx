@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { SupabaseAuthProvider } from "./context/SupabaseAuthContext";
-
+import { CalendarProvider } from "./context/CalendarContext";
 // Layouts
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./pages/Auth/ProtectedRoute";
@@ -75,7 +75,9 @@ function App() {
 
   return (
     <SupabaseAuthProvider>
-      <RouterProvider router={router} />
+      <CalendarProvider>
+        <RouterProvider router={router} />
+      </CalendarProvider>
     </SupabaseAuthProvider>
   );
 }
