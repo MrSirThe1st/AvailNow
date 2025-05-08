@@ -17,18 +17,34 @@ const Calendar = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768); // Check if mobile screen
 
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
-  const [activeCalendar, setActiveCalendar] = useState(null); // New state for active calendar
+  const [activeCalendar, setActiveCalendar] = useState(null);
   const [calendarsList, setCalendarsList] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [callbackProcessing, setCallbackProcessing] = useState(false);
   const [callbackError, setCallbackError] = useState(null);
+
+  const handleSetActiveCalendar = async (provider) => {
+    setActiveCalendar(provider);
+    await saveActiveCalendar(user.id, provider);
+  };
+
+  // Handle window resize to toggle between mobile and desktop views
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   // Restore session if needed
   useEffect(() => {
@@ -414,7 +430,7 @@ const Calendar = () => {
         </div>
       </div>
 
-      {/* Enhanced Calendar View Component */}
+      {/* Desktop Calendar View */}
       <CalendarView
         connectedCalendars={connectedCalendars.filter(
           (cal) => cal.provider === activeCalendar

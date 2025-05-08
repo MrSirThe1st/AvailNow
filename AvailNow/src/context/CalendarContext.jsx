@@ -14,29 +14,30 @@ export function CalendarProvider({ children }) {
   const [error, setError] = useState(null);
 
   // Load active calendar preference from database
-  const loadActiveCalendar = async () => {
-    if (!user?.id) return;
+const loadActiveCalendar = async (userId) => {
+  if (!userId) return;
 
-    try {
-      const { data, error } = await supabase
-        .from("calendar_settings")
-        .select("active_calendar")
-        .eq("user_id", user.id)
-        .single();
+  try {
+    const { data, error } = await supabase
+      .from("calendar_settings")
+      .select("*") // Changed to select all columns instead of just active_calendar
+      .eq("user_id", userId)
+      .single();
 
-      if (error && error.code !== "PGRST116") {
-        console.error("Error loading active calendar:", error);
-        return;
-      }
-
-      if (data?.active_calendar) {
-        console.log("Loaded active calendar from DB:", data.active_calendar);
-        setActiveCalendar(data.active_calendar);
-      }
-    } catch (err) {
-      console.error("Error in loadActiveCalendar:", err);
+    if (error) {
+      // More graceful error handling
+      console.warn("Error loading calendar settings:", error);
+      return;
     }
-  };
+
+    if (data && data.active_calendar) {
+      console.log("Loaded active calendar:", data.active_calendar);
+      setActiveCalendar(data.active_calendar);
+    }
+  } catch (err) {
+    console.error("Error in loadActiveCalendar:", err);
+  }
+};
 
   // Load connected calendars
   const loadConnectedCalendars = async () => {

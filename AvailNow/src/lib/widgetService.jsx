@@ -19,13 +19,15 @@ export const getWidgetSettings = async (userId) => {
 
     const { data, error } = await supabase
       .from("widget_settings")
-      .select("*")
+      .select(
+        "id, user_id, theme, accent_color, text_color, button_text, show_days, compact"
+      )
       .eq("user_id", userId)
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single
 
-    if (error && error.code !== "PGRST116") {
-      console.error("Error fetching widget settings:", error);
-      throw error;
+    if (error) {
+      console.warn("Error fetching widget settings:", error);
+      return getDefaultWidgetSettings();
     }
 
     return data || getDefaultWidgetSettings();
