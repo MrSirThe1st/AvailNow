@@ -1,18 +1,16 @@
+// src/components/widgets/EmbedCodeGenerator.jsx
 import React, { useState, useEffect } from "react";
-import { Check, Clipboard, Code, Moon, AlignRight, Sun } from "lucide-react";
+import { Check, Clipboard, Code } from "lucide-react";
 import {
   getWidgetSettings,
   saveWidgetSettings,
   generateWidgetEmbedCode,
 } from "../../lib/widgetService";
 import { useAuth } from "../../context/SupabaseAuthContext";
+import WidgetPreview from "./WidgetPreview"; // Import the new component
 import toast from "react-hot-toast";
 
-const EmbedCodeGenerator = ({
-  userId,
-  previewComponent,
-  initialSettings = null,
-}) => {
+const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -27,7 +25,9 @@ const EmbedCodeGenerator = ({
     compact: false,
     fontFamily: "Public Sans",
     fontSize: "16px",
-    rightToLeft: false,
+    providerName: "Dr. Sarah Johnson",
+    providerAddress: "123 Healthcare Blvd, Suite 300, San Francisco, CA 94103",
+    providerImage: "/api/placeholder/120/120",
   });
 
   const [embedCode, setEmbedCode] = useState("");
@@ -63,7 +63,14 @@ const EmbedCodeGenerator = ({
       try {
         setLoading(true);
         const settings = await getWidgetSettings(userId);
-        setWidgetSettings(settings);
+        setWidgetSettings({
+          ...settings,
+          providerName: settings.providerName || "Dr. Sarah Johnson",
+          providerAddress:
+            settings.providerAddress ||
+            "123 Healthcare Blvd, Suite 300, San Francisco, CA 94103",
+          providerImage: settings.providerImage || "/api/placeholder/120/120",
+        });
       } catch (err) {
         console.error("Error loading widget settings:", err);
         setError("Failed to load widget settings");
@@ -108,14 +115,6 @@ const EmbedCodeGenerator = ({
     setWidgetSettings((prev) => ({
       ...prev,
       theme: prev.theme === "light" ? "dark" : "light",
-    }));
-  };
-
-  // Toggle RTL mode
-  const toggleRTL = () => {
-    setWidgetSettings((prev) => ({
-      ...prev,
-      rightToLeft: !prev.rightToLeft,
     }));
   };
 
@@ -169,7 +168,6 @@ const EmbedCodeGenerator = ({
             <div className="space-y-4">
               <div className="flex justify-between items-center p-4 bg-white rounded-lg shadow-sm">
                 <div className="flex items-center gap-2">
-                  <Moon size={18} className="text-gray-700" />
                   <span className="text-sm font-medium">Dark mode</span>
                 </div>
                 <div
@@ -252,6 +250,38 @@ const EmbedCodeGenerator = ({
               />
             </div>
 
+            {/* Provider Name input */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-1">
+                Provider Name
+              </label>
+              <input
+                type="text"
+                value={widgetSettings.providerName}
+                onChange={(e) =>
+                  handleSettingChange("providerName", e.target.value)
+                }
+                className="w-full border rounded-md p-2"
+                placeholder="Dr. Sarah Johnson"
+              />
+            </div>
+
+            {/* Provider Address input */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-1">
+                Provider Address
+              </label>
+              <input
+                type="text"
+                value={widgetSettings.providerAddress}
+                onChange={(e) =>
+                  handleSettingChange("providerAddress", e.target.value)
+                }
+                className="w-full border rounded-md p-2"
+                placeholder="123 Main St, City, ST 12345"
+              />
+            </div>
+
             {/* Days to show selection */}
             <div className="mt-4">
               <label className="block text-sm font-medium mb-1">
@@ -296,23 +326,15 @@ const EmbedCodeGenerator = ({
                 />
               </div>
             </div>
-           
           </div>
 
           {/* Widget preview */}
           <div className="w-2/3">
-            <div className="mb-4 p-4 bg-white rounded-lg border border-gray-200">
-              <h3 className="text-sm font-medium mb-3">Widget Preview</h3>
-              <div className="flex justify-center">
-                {React.cloneElement(previewComponent, {
-                  ...widgetSettings,
-                  userId,
-                })}
-              </div>
-            </div>
+            {/* Replace the old preview with the new WidgetPreview component */}
+            <WidgetPreview settings={widgetSettings} userId={userId} />
 
             {/* Embed Code */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="mt-6 bg-white p-4 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-medium">Embed Code</h3>
                 <button

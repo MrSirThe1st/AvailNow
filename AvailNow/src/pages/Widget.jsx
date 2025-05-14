@@ -1,111 +1,120 @@
+// src/pages/Widget.jsx
 import React, { useState, useEffect } from "react";
-import {
-  ExternalLink,
-  BarChart3,
-} from "lucide-react";
-import EmbedWidget from "../components/widgets/EmbedWidget";
-import EmbedCodeGenerator from "../components/widgets/EmbedCodeGenerator";
+import { Loader, Info } from "lucide-react";
 import { useAuth } from "../context/SupabaseAuthContext";
-import { useWidgetEmbed } from "../hooks/useWidgetEmbed";
-import { useWidgetSettings } from "../hooks/useWidgetSettings";
-import { getWidgetStatistics } from "../lib/widgetService";
+import EmbedCodeGenerator from "../components/widgets/EmbedCodeGenerator";
+import { getWidgetSettings, getWidgetStatistics } from "../lib/widgetService";
 
 const Widget = () => {
   const { user } = useAuth();
+  const [widgetSettings, setWidgetSettings] = useState(null);
+  const [widgetStats, setWidgetStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [stats, setStats] = useState({
-    views: 0,
-    clicks: 0,
-    bookings: 0,
-    last_updated: null,
-  });
 
-  // Use the custom hooks to manage widget settings and embed code
-  const {
-    settings,
-    saveSettings: saveWidgetSettings,
-    loading: settingsLoading,
-  } = useWidgetSettings(user?.id);
-
-  const { embedCode, copyToClipboard, generateIframeCode } = useWidgetEmbed(
-    user?.id,
-    settings
-  );
-
-  // Fetch widget statistics on mount
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!user?.id) return;
+    const loadWidgetData = async () => {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
-        const widgetStats = await getWidgetStatistics(user.id);
-        setStats(widgetStats);
         setError(null);
+
+        // Load widget settings and statistics in parallel
+        const [settings, stats] = await Promise.all([
+          getWidgetSettings(user.id),
+          getWidgetStatistics(user.id),
+        ]);
+
+        setWidgetSettings(settings);
+        setWidgetStats(stats);
       } catch (err) {
-        console.error("Error fetching widget statistics:", err);
-        setError("Failed to load widget statistics");
+        console.error("Error loading widget data:", err);
+        setError("Failed to load widget data. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStats();
-  }, [user]);
+    loadWidgetData();
+  }, [user?.id]);
 
-
-
-  if (loading && !user) {
+  if (loading) {
     return (
-      <div className="p-8 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-4">Loading widget settings...</p>
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-gray-500">Loading widget data...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">
-          {error}
-        </div>
-      )}
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold mb-4">Widget Configuration</h1>
+        <p className="text-gray-600 mb-6">
+          Customize your AvailNow widget and get the embed code to add it to
+          your website.
+        </p>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 my-4">
-        <div className="bg-white p-4 rounded-lg shadow flex items-center">
-          <div className="p-3 bg-blue-100 rounded-full mr-4">
-            <BarChart3 size={20} className="text-blue-600" />
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+            <div className="flex">
+              <Info className="h-5 w-5 mr-2" />
+              <span>{error}</span>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Views</p>
-            <p className="text-2xl font-bold">{stats.views || 0}</p>
-          </div>
-        </div>
+        )}
 
-        <div className="bg-white p-4 rounded-lg shadow flex items-center">
-          <div className="p-3 bg-green-100 rounded-full mr-4">
-            <ExternalLink size={20} className="text-green-600" />
+        {/* Widget statistics */}
+        {widgetStats && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <h2 className="text-lg font-semibold mb-4">Widget Analytics</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Views</h3>
+                <p className="text-3xl font-bold text-blue-600">
+                  {widgetStats.views || 0}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Number of times your widget has been loaded
+                </p>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Clicks</h3>
+                <p className="text-3xl font-bold text-green-600">
+                  {widgetStats.clicks || 0}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Number of users who have interacted with the widget
+                </p>
+              </div>
+
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Bookings</h3>
+                <p className="text-3xl font-bold text-purple-600">
+                  {widgetStats.bookings || 0}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Number of bookings initiated through the widget
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Clicks</p>
-            <p className="text-2xl font-bold">{stats.clicks || 0}</p>
-          </div>
-        </div>
+        )}
+
+        {/* Embed code generator with interactive preview */}
+        <EmbedCodeGenerator
+          userId={user?.id}
+          initialSettings={widgetSettings}
+        />
       </div>
-
-      {/* Widget Generator */}
-      <EmbedCodeGenerator
-        userId={user?.id}
-        previewComponent={<EmbedWidget userId={user?.id} />}
-        initialSettings={settings}
-      />
     </div>
   );
 };
-
-
 
 export default Widget;

@@ -378,6 +378,7 @@
    * @param {Object} widgetData - Widget data from API
    * @param {Object} settings - Widget settings
    */
+
   function renderWidget(container, widgetData, settings) {
     // Extract data from API response
     const {
