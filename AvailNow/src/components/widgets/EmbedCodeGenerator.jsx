@@ -181,8 +181,6 @@ const EmbedCodeGenerator = ({
                   />
                 </div>
               </div>
-
-     
             </div>
 
             {/* Color presets */}
@@ -236,8 +234,6 @@ const EmbedCodeGenerator = ({
                   ))}
                 </div>
               </div>
-
-
             </div>
 
             {/* Button text input */}
@@ -300,6 +296,7 @@ const EmbedCodeGenerator = ({
                 />
               </div>
             </div>
+           
           </div>
 
           {/* Widget preview */}

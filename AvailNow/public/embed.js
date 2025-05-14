@@ -5,7 +5,7 @@
  */
 
 (function (window, document) {
-  "use strict";
+  ("use strict");
 
   // Create the AvailNow global object if it doesn't exist
   window.AvailNow = window.AvailNow || {};
@@ -20,6 +20,10 @@
     buttonText: "Check Availability",
     showDays: 5,
     compact: false,
+    floating: true,
+    providerName: "",
+    providerAddress: "",
+    providerImage: "",
   };
 
   // API endpoints
@@ -35,45 +39,78 @@
     // Merge user options with defaults
     const settings = Object.assign({}, defaultSettings, options);
 
-    // Ensure a valid selector and userId are provided
-    if (!settings.selector) {
-      console.error("AvailNow: No selector provided");
-      return;
-    }
-
+    // Ensure a valid userId is provided
     if (!settings.userId) {
       console.error("AvailNow: No userId provided");
       return;
     }
 
-    // Find the container element
-    const container = document.querySelector(settings.selector);
-    if (!container) {
-      console.error(
-        `AvailNow: Element with selector "${settings.selector}" not found`
-      );
-      return;
-    }
-
-    // Set a loading state
-    container.innerHTML =
-      '<div style="text-align: center; padding: 20px;">Loading AvailNow widget...</div>';
-
-    // Load the widget CSS
+    // Load widget styles
     loadStyles();
 
-    // Fetch availability data from the API
-    fetchWidgetData(settings.userId)
-      .then((widgetData) => {
-        // Render the widget with the data
-        renderWidget(container, widgetData, settings);
-      })
-      .catch((error) => {
-        console.error("AvailNow: Error fetching availability data", error);
-        container.innerHTML =
-          '<div style="text-align: center; padding: 20px; color: #ef4444;">Error loading availability data</div>';
-      });
+    // If floating widget is enabled, create the floating button and widget
+
+    createFloatingWidget(settings);
   };
+
+  /**
+   * Create a floating widget
+   * @param {Object} settings - Widget settings
+   */
+  function createFloatingWidget(settings) {
+    // Create container for floating widget
+    const floatingContainer = document.createElement("div");
+    floatingContainer.className = "availnow-floating-container";
+    document.body.appendChild(floatingContainer);
+
+    // Create button
+    const button = document.createElement("button");
+    button.className = "availnow-floating-button";
+    button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>${settings.buttonText}</span>`;
+    button.style.backgroundColor = settings.accentColor;
+    floatingContainer.appendChild(button);
+
+    // Create widget container
+    const widgetContainer = document.createElement("div");
+    widgetContainer.className = "availnow-floating-widget";
+    widgetContainer.style.display = "none";
+    floatingContainer.appendChild(widgetContainer);
+
+    // Set loading state
+    widgetContainer.innerHTML =
+      '<div style="text-align: center; padding: 20px;">Loading AvailNow widget...</div>';
+
+    // Toggle widget on button click
+    button.addEventListener("click", () => {
+      if (widgetContainer.style.display === "none") {
+        widgetContainer.style.display = "block";
+        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+        // Track widget view
+        trackEvent(settings.userId, "click");
+
+        // Fetch data if not loaded yet
+        if (widgetContainer.dataset.loaded !== "true") {
+          fetchWidgetData(settings.userId)
+            .then((widgetData) => {
+              renderWidget(widgetContainer, widgetData, settings);
+              widgetContainer.dataset.loaded = "true";
+            })
+            .catch((error) => {
+              console.error(
+                "AvailNow: Error fetching availability data",
+                error
+              );
+              widgetContainer.innerHTML =
+                '<div style="text-align: center; padding: 20px; color: #ef4444;">Error loading availability data</div>';
+            });
+        }
+      } else {
+        widgetContainer.style.display = "none";
+        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>${settings.buttonText}</span>`;
+      }
+    });
+  }
 
   /**
    * Load the widget CSS styles
@@ -86,28 +123,82 @@
     const styleElement = document.createElement("style");
     styleElement.id = "availnow-styles";
     styleElement.textContent = `
+      .availnow-floating-container {
+        position: relative;
+        z-index: 9999;
+      }
+      
+      .availnow-floating-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 24px;
+        background-color: #0070f3;
+        color: white;
+        border: none;
+        border-radius: 50px;
+        font-weight: 500;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+      }
+      
+      .availnow-floating-button svg {
+        margin-right: 8px;
+      }
+      
+      .availnow-floating-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+      }
+      
+      .availnow-floating-widget {
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        width: 650px;
+        max-width: 95vw;
+        background-color: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s;
+        z-index: 9998;
+        animation: slide-up 0.3s ease;
+      }
+      
+      @keyframes slide-up {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      
+      @media (max-width: 768px) {
+        .availnow-floating-widget {
+          width: 100%;
+          bottom: 0;
+          right: 0;
+          border-radius: 12px 12px 0 0;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+        
+        .availnow-floating-button {
+          width: calc(100% - 40px);
+          justify-content: center;
+        }
+      }
+      
       .availnow-widget {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
         box-sizing: border-box;
       }
       .availnow-widget * {
         box-sizing: border-box;
-      }
-      .availnow-widget-expanded .availnow-widget-content {
-        max-height: 400px;
-        overflow-y: auto;
-      }
-      .availnow-widget-spinner {
-        display: inline-block;
-        width: 30px;
-        height: 30px;
-        border: 3px solid rgba(0, 112, 243, 0.2);
-        border-radius: 50%;
-        border-top-color: #0070f3;
-        animation: spin 1s ease-in-out infinite;
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
       }
     `;
 

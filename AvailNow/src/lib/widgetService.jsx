@@ -69,18 +69,20 @@ export const generateWidgetEmbedCode = (userId, settings) => {
   const settingsToUse = settings || getDefaultWidgetSettings();
 
   return `<!-- AvailNow Widget -->
-<div id="availnow-widget"></div>
 <script src="https://widget.availnow.com/embed.js"></script>
 <script>
   AvailNow.initialize({
-    selector: "#availnow-widget",
     userId: "${userId}",
     theme: "${settingsToUse.theme}",
     accentColor: "${settingsToUse.accentColor}",
     textColor: "${settingsToUse.textColor}",
     buttonText: "${settingsToUse.buttonText}",
     showDays: ${settingsToUse.showDays},
-    compact: ${settingsToUse.compact}
+    compact: ${settingsToUse.compact},
+    floating: true,
+    providerName: "${settingsToUse.providerName || ""}",
+    providerAddress: "${settingsToUse.providerAddress || ""}",
+    providerImage: "${settingsToUse.providerImage || ""}"
   });
 </script>
 <!-- End AvailNow Widget -->`;
