@@ -1,10 +1,12 @@
 // src/components/widgets/WidgetPreview.jsx
 import React, { useState, useEffect } from "react";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Maximize2, Minimize2, X, Smartphone, Monitor } from "lucide-react";
 import FloatingWidget from "./FloatingWidget";
+import MobileFloatingWidget from "./MobileFloatingWidget";
 
 const WidgetPreview = ({ settings, userId }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState("desktop"); // desktop or mobile
 
   // Prevent body scrolling when in fullscreen
   useEffect(() => {
@@ -320,29 +322,154 @@ const WidgetPreview = ({ settings, userId }) => {
     </div>
   );
 
+  // Mobile version of the mock website
+  const MobileMockWebsite = () => (
+    <div
+      className="min-h-full bg-white text-gray-800 font-sans"
+      style={{
+        maxWidth: "375px",
+        margin: "0 auto",
+        border: "10px solid #111",
+        borderRadius: "30px",
+        height: "80vh",
+        overflow: "auto",
+        position: "relative",
+      }}
+    >
+      {/* Mobile status bar */}
+      <div
+        className="bg-black text-white py-1 px-4 flex justify-between items-center text-xs"
+        style={{ fontSize: "10px" }}
+      >
+        <span>9:41</span>
+        <div className="flex space-x-1">
+          <span>5G</span>
+          <span>••••</span>
+        </div>
+      </div>
+
+      {/* Mobile Header */}
+      <div className="bg-white p-4 shadow-sm flex flex-col items-center">
+        <div className="h-10 w-32 bg-blue-600 rounded-md flex items-center justify-center text-white mb-2">
+          LOGO
+        </div>
+        <h1 className="text-xl font-bold">Website Title</h1>
+      </div>
+
+      {/* Mobile Content */}
+      <div className="p-4 space-y-3">
+        <div className="h-3 bg-gray-200 rounded w-full"></div>
+        <div className="h-3 bg-gray-200 rounded w-full"></div>
+        <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+
+        <div className="h-40 bg-gray-200 rounded-md w-full flex items-center justify-center mt-4 mb-4 text-gray-500">
+          Content Image
+        </div>
+
+        <div className="h-3 bg-gray-200 rounded w-full"></div>
+        <div className="h-3 bg-gray-200 rounded w-4/5"></div>
+        <div className="h-3 bg-gray-200 rounded w-full"></div>
+        <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+      </div>
+
+      {/* This div ensures enough height for scrolling */}
+      <div className="min-h-[300px]"></div>
+    </div>
+  );
+
   // Regular preview
   const RegularPreview = () => (
     <div className="relative bg-white p-4 rounded-lg border border-gray-200">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-medium">Widget Preview</h3>
-        <button
-          onClick={() => setIsFullscreen(true)}
-          className="flex items-center text-sm text-blue-600 hover:text-blue-800"
-        >
-          <Maximize2 size={16} className="mr-1" />
-          View Fullscreen
-        </button>
-      </div>
-      <div className="flex justify-center">
-        <div
-          className="relative bg-gray-100 rounded-lg p-6 w-full"
-          style={{ height: "300px" }}
-        >
-          <div className="text-center text-gray-500 mb-4">
-            Widget Preview Area
+        <div className="flex items-center">
+          {/* Toggle between desktop and mobile view */}
+          <div className="flex bg-gray-100 rounded-md p-1 mr-4">
+            <button
+              onClick={() => setViewMode("desktop")}
+              className={`flex items-center px-3 py-1 text-xs rounded ${
+                viewMode === "desktop"
+                  ? "bg-white shadow-sm text-blue-600"
+                  : "text-gray-600"
+              }`}
+            >
+              <Monitor size={16} className="mr-1" />
+              Desktop
+            </button>
+            <button
+              onClick={() => setViewMode("mobile")}
+              className={`flex items-center px-3 py-1 text-xs rounded ${
+                viewMode === "mobile"
+                  ? "bg-white shadow-sm text-blue-600"
+                  : "text-gray-600"
+              }`}
+            >
+              <Smartphone size={16} className="mr-1" />
+              Mobile
+            </button>
           </div>
-          <FloatingWidget {...settings} userId={userId} />
+
+          {/* Fullscreen button */}
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="flex items-center text-sm text-blue-600 hover:text-blue-800"
+          >
+            <Maximize2 size={16} className="mr-1" />
+            View Fullscreen
+          </button>
         </div>
+      </div>
+
+      {/* Preview area */}
+      <div className="flex justify-center">
+        {viewMode === "desktop" ? (
+          // Desktop preview
+          <div
+            className="relative bg-gray-100 rounded-lg p-6 w-full"
+            style={{ height: "300px" }}
+          >
+            <div className="text-center text-gray-500 mb-4">
+              Desktop Widget Preview
+            </div>
+            <FloatingWidget {...settings} userId={userId} />
+          </div>
+        ) : (
+          // Mobile preview
+          <div
+            className="relative bg-gray-100 rounded-lg p-6 w-full flex justify-center items-center"
+            style={{ height: "400px" }}
+          >
+            <div
+              className="bg-white"
+              style={{
+                width: "320px",
+                height: "380px",
+                position: "relative",
+                border: "8px solid #111",
+                borderRadius: "24px",
+                overflow: "hidden",
+              }}
+            >
+              {/* Mock mobile status bar */}
+              <div className="bg-black text-white px-4 py-1 flex justify-between items-center text-xs">
+                <span>9:41</span>
+                <div className="flex items-center space-x-1">
+                  <span>5G</span>
+                  <span>••••</span>
+                </div>
+              </div>
+
+              {/* Mobile content placeholder */}
+              <div className="bg-gray-100 h-full p-4 flex flex-col items-center">
+                <div className="text-center text-gray-500 mb-2 text-xs">
+                  Mobile Widget Preview
+                </div>
+                {/* Show the mobile floating button */}
+                <MobileFloatingWidget {...settings} userId={userId} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -351,6 +478,33 @@ const WidgetPreview = ({ settings, userId }) => {
   const FullscreenPreview = () => (
     <div className="fixed inset-0 z-50 bg-white overflow-auto">
       <div className="absolute top-4 right-4 z-50 flex space-x-2">
+        {/* Toggle between desktop and mobile view */}
+        <div className="flex bg-white rounded-full shadow-lg">
+          <button
+            onClick={() => setViewMode("desktop")}
+            className={`flex items-center p-2 rounded-l-full ${
+              viewMode === "desktop"
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600"
+            }`}
+            title="Desktop view"
+          >
+            <Monitor size={20} />
+          </button>
+          <button
+            onClick={() => setViewMode("mobile")}
+            className={`flex items-center p-2 rounded-r-full ${
+              viewMode === "mobile"
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600"
+            }`}
+            title="Mobile view"
+          >
+            <Smartphone size={20} />
+          </button>
+        </div>
+
+        {/* Exit fullscreen button */}
         <button
           onClick={() => setIsFullscreen(false)}
           className="bg-white p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors"
@@ -363,8 +517,8 @@ const WidgetPreview = ({ settings, userId }) => {
       {/* Demo info bar */}
       <div className="sticky top-0 z-40 bg-blue-600 text-white text-sm px-4 py-2 flex justify-between items-center">
         <div>
-          AvailNow Widget Demo - Preview of how it will appear on a business
-          website
+          AvailNow Widget Demo - {viewMode === "desktop" ? "Desktop" : "Mobile"}{" "}
+          Preview
         </div>
         <button
           onClick={() => setIsFullscreen(false)}
@@ -375,11 +529,27 @@ const WidgetPreview = ({ settings, userId }) => {
         </button>
       </div>
 
-      {/* Mock website with working widget */}
-      <div className="relative">
-        <MockWebsite />
-        <FloatingWidget {...settings} userId={userId} />
-      </div>
+      {/* Mock website with working widget based on view mode */}
+      {viewMode === "desktop" ? (
+        <div className="relative">
+          <MockWebsite />
+          <FloatingWidget {...settings} userId={userId} />
+        </div>
+      ) : (
+        <div className="flex justify-center py-8 bg-gray-900 min-h-screen">
+          <MobileMockWebsite />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <MobileFloatingWidget {...settings} userId={userId} />
+          </div>
+        </div>
+      )}
     </div>
   );
 
