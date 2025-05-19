@@ -327,27 +327,13 @@ const WidgetPreview = ({ settings, userId }) => {
     <div
       className="min-h-full bg-white text-gray-800 font-sans"
       style={{
-        maxWidth: "375px",
+        maxWidth: "100%",
         margin: "0 auto",
-        border: "10px solid #111",
-        borderRadius: "30px",
-        height: "80vh",
+        height: "100vh",
         overflow: "auto",
         position: "relative",
       }}
     >
-      {/* Mobile status bar */}
-      <div
-        className="bg-black text-white py-1 px-4 flex justify-between items-center text-xs"
-        style={{ fontSize: "10px" }}
-      >
-        <span>9:41</span>
-        <div className="flex space-x-1">
-          <span>5G</span>
-          <span>••••</span>
-        </div>
-      </div>
-
       {/* Mobile Header */}
       <div className="bg-white p-4 shadow-sm flex flex-col items-center">
         <div className="h-10 w-32 bg-blue-600 rounded-md flex items-center justify-center text-white mb-2">
@@ -423,52 +409,9 @@ const WidgetPreview = ({ settings, userId }) => {
       {/* Preview area */}
       <div className="flex justify-center">
         {viewMode === "desktop" ? (
-          // Desktop preview
-          <div
-            className="relative bg-gray-100 rounded-lg p-6 w-full"
-            style={{ height: "300px" }}
-          >
-            <div className="text-center text-gray-500 mb-4">
-              Desktop Widget Preview
-            </div>
-            <FloatingWidget {...settings} userId={userId} />
-          </div>
+          <FloatingWidget {...settings} userId={userId} />
         ) : (
-          // Mobile preview
-          <div
-            className="relative bg-gray-100 rounded-lg p-6 w-full flex justify-center items-center"
-            style={{ height: "400px" }}
-          >
-            <div
-              className="bg-white"
-              style={{
-                width: "320px",
-                height: "380px",
-                position: "relative",
-                border: "8px solid #111",
-                borderRadius: "24px",
-                overflow: "hidden",
-              }}
-            >
-              {/* Mock mobile status bar */}
-              <div className="bg-black text-white px-4 py-1 flex justify-between items-center text-xs">
-                <span>9:41</span>
-                <div className="flex items-center space-x-1">
-                  <span>5G</span>
-                  <span>••••</span>
-                </div>
-              </div>
-
-              {/* Mobile content placeholder */}
-              <div className="bg-gray-100 h-full p-4 flex flex-col items-center">
-                <div className="text-center text-gray-500 mb-2 text-xs">
-                  Mobile Widget Preview
-                </div>
-                {/* Show the mobile floating button */}
-                <MobileFloatingWidget {...settings} userId={userId} />
-              </div>
-            </div>
-          </div>
+          <MobileFloatingWidget {...settings} userId={userId} />
         )}
       </div>
     </div>
