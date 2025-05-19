@@ -1,12 +1,9 @@
-// src/components/widgets/EmbedCodeGenerator.jsx
 import React, { useState, useEffect } from "react";
 import { Check, Clipboard, Code, Monitor, Smartphone } from "lucide-react";
 import {
   getWidgetSettings,
   saveWidgetSettings,
   generateWidgetEmbedCode,
-  generateMobileWidgetEmbedCode,
-  generateResponsiveWidgetEmbedCode,
 } from "../../lib/widgetService";
 import { useAuth } from "../../context/SupabaseAuthContext";
 import WidgetPreview from "./WidgetPreview";
@@ -17,8 +14,6 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("appearance");
-  const [embedType, setEmbedType] = useState("responsive"); // responsive, desktop, mobile
   const [widgetSettings, setWidgetSettings] = useState({
     theme: "light",
     accentColor: "#0070f3",
@@ -34,8 +29,6 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
   });
 
   const [embedCode, setEmbedCode] = useState("");
-  const [mobileEmbedCode, setMobileEmbedCode] = useState("");
-  const [responsiveEmbedCode, setResponsiveEmbedCode] = useState("");
 
   // Color preset options
   const colorPresets = [
@@ -87,26 +80,15 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
     loadSettings();
   }, [userId, initialSettings]);
 
-  // Generate the embed codes whenever settings change
+  // Generate the embed code whenever settings change
   useEffect(() => {
     if (!userId) return;
     try {
-      // Generate standard desktop widget code
-      const desktopCode = generateWidgetEmbedCode(userId, widgetSettings);
-      setEmbedCode(desktopCode);
-
-      // Generate mobile-specific widget code
-      const mobileCode = generateMobileWidgetEmbedCode(userId, widgetSettings);
-      setMobileEmbedCode(mobileCode);
-
-      // Generate responsive widget code (works on both desktop and mobile)
-      const responsiveCode = generateResponsiveWidgetEmbedCode(
-        userId,
-        widgetSettings
-      );
-      setResponsiveEmbedCode(responsiveCode);
+      // Generate universal responsive widget code
+      const code = generateWidgetEmbedCode(userId, widgetSettings);
+      setEmbedCode(code);
     } catch (err) {
-      console.error("Error generating embed codes:", err);
+      console.error("Error generating embed code:", err);
     }
   }, [widgetSettings, userId]);
 
@@ -153,41 +135,14 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
 
   // Copy code to clipboard
   const copyToClipboard = async () => {
-    let codeToCopy;
-
-    switch (embedType) {
-      case "desktop":
-        codeToCopy = embedCode;
-        break;
-      case "mobile":
-        codeToCopy = mobileEmbedCode;
-        break;
-      case "responsive":
-      default:
-        codeToCopy = responsiveEmbedCode;
-    }
-
     try {
-      await navigator.clipboard.writeText(codeToCopy);
+      await navigator.clipboard.writeText(embedCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success("Copied to clipboard");
     } catch (err) {
       console.error("Failed to copy code to clipboard:", err);
       toast.error("Failed to copy code");
-    }
-  };
-
-  // Get the current code to display based on selected type
-  const getCurrentEmbedCode = () => {
-    switch (embedType) {
-      case "desktop":
-        return embedCode;
-      case "mobile":
-        return mobileEmbedCode;
-      case "responsive":
-      default:
-        return responsiveEmbedCode;
     }
   };
 
@@ -377,69 +332,28 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
             {/* Widget preview component */}
             <WidgetPreview settings={widgetSettings} userId={userId} />
 
-            {/* Embed Code Selection */}
+            {/* Embed Code */}
             <div className="mt-6 bg-white p-4 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-medium">Embed Code</h3>
 
                 {/* Copy button */}
-                <div className="flex items-center">
-                  {/* Code type selector */}
-                  <div className="flex rounded-md bg-gray-100 p-1 mr-4">
-                    <button
-                      onClick={() => setEmbedType("responsive")}
-                      className={`flex items-center px-3 py-1 text-xs rounded ${
-                        embedType === "responsive"
-                          ? "bg-white shadow-sm text-blue-600"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      <Monitor size={12} className="mr-1" />
-                      <Smartphone size={12} className="mr-1" />
-                      Responsive
-                    </button>
-                    <button
-                      onClick={() => setEmbedType("desktop")}
-                      className={`flex items-center px-3 py-1 text-xs rounded ${
-                        embedType === "desktop"
-                          ? "bg-white shadow-sm text-blue-600"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      <Monitor size={14} className="mr-1" />
-                      Desktop
-                    </button>
-                    <button
-                      onClick={() => setEmbedType("mobile")}
-                      className={`flex items-center px-3 py-1 text-xs rounded ${
-                        embedType === "mobile"
-                          ? "bg-white shadow-sm text-blue-600"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      <Smartphone size={14} className="mr-1" />
-                      Mobile
-                    </button>
-                  </div>
-
-                  {/* Copy button */}
-                  <button
-                    onClick={copyToClipboard}
-                    className="flex items-center px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-                  >
-                    {copied ? (
-                      <>
-                        <Check size={16} className="mr-1 text-green-500" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Clipboard size={16} className="mr-1" />
-                        Copy Code
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={copyToClipboard}
+                  className="flex items-center px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  {copied ? (
+                    <>
+                      <Check size={16} className="mr-1 text-green-500" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard size={16} className="mr-1" />
+                      Copy Code
+                    </>
+                  )}
+                </button>
               </div>
 
               <div className="relative">
@@ -448,16 +362,14 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
                 </div>
 
                 <pre className="bg-gray-50 p-4 pl-10 rounded-md overflow-auto text-sm border text-gray-700 max-h-60">
-                  {getCurrentEmbedCode()}
+                  {embedCode}
                 </pre>
               </div>
 
               <p className="mt-4 text-xs text-gray-600">
-                {embedType === "responsive"
-                  ? "This code automatically adapts to both desktop and mobile devices. Copy and paste it into your website where you want the widget to appear."
-                  : embedType === "desktop"
-                    ? "This code is optimized for desktop devices. Copy and paste it into your website where you want the widget to appear."
-                    : "This code is optimized for mobile devices. Copy and paste it into your website where you want the widget to appear."}
+                This code automatically adapts to both desktop and mobile
+                devices. Copy and paste it into your website where you want the
+                widget to appear.
               </p>
             </div>
           </div>

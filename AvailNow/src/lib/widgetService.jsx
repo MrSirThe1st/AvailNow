@@ -56,7 +56,7 @@ export const getDefaultWidgetSettings = () => {
 };
 
 /**
- * Generate widget embed code for a user
+ * Generate a universal widget embed code for a user that works on all devices
  * @param {string} userId - Supabase or Clerk user ID
  * @param {Object} settings - Widget settings
  * @returns {string} - HTML embed code
@@ -79,13 +79,33 @@ export const generateWidgetEmbedCode = (userId, settings) => {
     buttonText: "${settingsToUse.buttonText}",
     showDays: ${settingsToUse.showDays},
     compact: ${settingsToUse.compact},
-    floating: true,
+    responsive: true,
     providerName: "${settingsToUse.providerName || ""}",
     providerAddress: "${settingsToUse.providerAddress || ""}",
     providerImage: "${settingsToUse.providerImage || ""}"
   });
 </script>
 <!-- End AvailNow Widget -->`;
+};
+
+/**
+ * For backward compatibility - returns the same code as generateWidgetEmbedCode
+ * @param {string} userId - Supabase or Clerk user ID
+ * @param {Object} settings - Widget settings
+ * @returns {string} - HTML embed code for mobile
+ */
+export const generateMobileWidgetEmbedCode = (userId, settings) => {
+  return generateWidgetEmbedCode(userId, settings);
+};
+
+/**
+ * For backward compatibility - returns the same code as generateWidgetEmbedCode
+ * @param {string} userId - Supabase or Clerk user ID
+ * @param {Object} settings - Widget settings
+ * @returns {string} - HTML embed code for responsive widget
+ */
+export const generateResponsiveWidgetEmbedCode = (userId, settings) => {
+  return generateWidgetEmbedCode(userId, settings);
 };
 
 /**
