@@ -1,3 +1,4 @@
+// src/components/widgets/MobileFloatingWidget.jsx
 import React, { useState } from "react";
 import { Calendar, X } from "lucide-react";
 import MobileEmbedWidget from "./MobileEmbedWidget";
@@ -20,11 +21,11 @@ const MobileFloatingWidget = ({
     setIsOpen(!isOpen);
   };
 
-  // Mobile floating button styles
+  // Mobile floating button styles - position now at bottom right
   const buttonStyle = {
     position: "fixed",
     bottom: "20px",
-    left: "20px", // Position on the left for mobile
+    right: "20px", // Changed from left to right
     backgroundColor: accentColor,
     color: "#ffffff",
     border: "none",

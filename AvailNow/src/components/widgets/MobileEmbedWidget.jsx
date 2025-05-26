@@ -569,7 +569,9 @@ const MobileEmbedWidget = ({
           <Clock size={18} style={{ marginRight: "8px" }} />
           {buttonText}
         </h2>
-        <button style={styles.closeButton}>✕</button>
+        <button style={styles.closeButton} onClick={() => setIsOpen(false)}>
+          ✕
+        </button>
 
         {/* Provider info */}
         <div style={styles.providerInfo}>

@@ -326,7 +326,6 @@ const EmbedCodeGenerator = ({ userId, initialSettings = null }) => {
               </div>
             </div>
           </div>
-
           {/* Widget preview and embed code */}
           <div className="w-2/3">
             {/* Widget preview component */}
