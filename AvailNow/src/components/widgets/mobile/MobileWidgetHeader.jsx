@@ -1,6 +1,6 @@
 // src/components/widgets/mobile/MobileWidgetHeader.jsx
 import React from "react";
-import { Clock, MapPin } from "lucide-react";
+import { Clock, X } from "lucide-react";
 
 const MobileWidgetHeader = ({
   buttonText,
@@ -12,82 +12,63 @@ const MobileWidgetHeader = ({
 }) => {
   const styles = {
     header: {
-      backgroundColor: accentColor,
-      color: "#FFFFFF",
+      backgroundColor: "#FFFFFF",
+      color: "#333333",
       padding: "16px",
       position: "relative",
+      borderBottom: "1px solid #E5E7EB",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    leftSection: {
+      display: "flex",
+      alignItems: "center",
+    },
+    icon: {
+      width: "32px",
+      height: "32px",
+      borderRadius: "50%",
+      backgroundColor: accentColor,
+      color: "#FFFFFF",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: "12px",
+    },
+    title: {
+      margin: 0,
+      fontSize: "16px",
+      fontWeight: "500",
+      color: "#333333",
     },
     closeButton: {
-      position: "absolute",
-      top: "16px",
-      right: "16px",
-      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      backgroundColor: "transparent",
       border: "none",
       borderRadius: "50%",
-      width: "24px",
-      height: "24px",
+      width: "32px",
+      height: "32px",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       cursor: "pointer",
-    },
-    title: {
-      margin: 0,
-      fontSize: "18px",
-      fontWeight: "bold",
-      display: "flex",
-      alignItems: "center",
-    },
-    providerInfo: {
-      display: "flex",
-      alignItems: "center",
-      marginTop: "8px",
-    },
-    providerImage: {
-      width: "32px",
-      height: "32px",
-      borderRadius: "50%",
-      marginRight: "8px",
-      objectFit: "cover",
-    },
-    providerDetails: {
-      fontSize: "14px",
-    },
-    providerName: {
-      fontWeight: "500",
-    },
-    providerAddress: {
-      fontSize: "12px",
-      opacity: 0.8,
-      display: "flex",
-      alignItems: "center",
+      color: "#6B7280",
     },
   };
 
   return (
     <div style={styles.header}>
-      <h2 style={styles.title}>
-        <Clock size={18} style={{ marginRight: "8px" }} />
-        {buttonText}
-      </h2>
-      <button style={styles.closeButton} onClick={onClose}>
-        ✕
-      </button>
-
-      <div style={styles.providerInfo}>
-        <img
-          src={providerImage}
-          alt={providerName}
-          style={styles.providerImage}
-        />
-        <div style={styles.providerDetails}>
-          <div style={styles.providerName}>{providerName}</div>
-          <div style={styles.providerAddress}>
-            <MapPin size={12} style={{ marginRight: "4px" }} />
-            {providerAddress}
-          </div>
+      <div style={styles.leftSection}>
+        <div style={styles.icon}>
+          <Clock size={16} />
         </div>
+        <h2 style={styles.title}>{buttonText}</h2>
       </div>
+      {onClose && (
+        <button style={styles.closeButton} onClick={onClose}>
+          <X size={20} />
+        </button>
+      )}
     </div>
   );
 };

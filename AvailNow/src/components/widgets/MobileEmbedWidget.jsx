@@ -1,4 +1,4 @@
-// src/components/widgets/MobileEmbedWidget.jsx (Refactored)
+// src/components/widgets/MobileEmbedWidget.jsx
 import React from "react";
 import { useMobileAvailability } from "../../hooks/useMobileAvailability";
 import MobileWidgetHeader from "./mobile/MobileWidgetHeader";
@@ -7,9 +7,6 @@ import MobileTimeSlots from "./mobile/MobileTimeSlots";
 import MobileWidgetFooter from "./mobile/MobileWidgetFooter";
 import MobileLoadingState from "./mobile/MobileLoadingState";
 
-/**
- * Mobile-optimized embedded widget component that displays availability slots
- */
 const MobileEmbedWidget = ({
   userId,
   theme = "light",
@@ -35,83 +32,101 @@ const MobileEmbedWidget = ({
 
   const containerStyle = {
     fontFamily: "'Inter', system-ui, sans-serif",
-    backgroundColor: theme === "light" ? "#FFFFFF" : "#1F2937",
-    color: theme === "light" ? textColor : "#F3F4F6",
-    borderRadius: "12px 12px 0 0",
+    backgroundColor: "#FFFFFF",
+    borderRadius: "16px 16px 0 0",
     overflow: "hidden",
     width: "100%",
     maxWidth: "100%",
-    boxShadow: "0 -4px 10px rgba(0, 0, 0, 0.1)",
+    boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.12)",
     position: "fixed",
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 9999,
-    maxHeight: "90vh",
+    zIndex: 9998,
+    maxHeight: "85vh",
     overflowY: "auto",
+    animation: "slideUp 0.3s ease-out",
   };
 
-  const noAvailabilityStyle = {
-    textAlign: "center",
-    padding: "24px 16px",
-    color: theme === "light" ? "#6B7280" : "#9CA3AF",
-  };
+  const globalStyle = `
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  `;
 
   if (loading) {
     return (
-      <MobileLoadingState
-        buttonText={buttonText}
-        accentColor={accentColor}
-        theme={theme}
-      />
+      <>
+        <style>{globalStyle}</style>
+        <MobileLoadingState
+          buttonText={buttonText}
+          accentColor={accentColor}
+          theme={theme}
+        />
+      </>
     );
   }
 
   if (error) {
     return (
-      <div style={containerStyle}>
-        <MobileWidgetHeader
-          buttonText={buttonText}
-          accentColor={accentColor}
-          providerName={providerName}
-          providerAddress={providerAddress}
-          providerImage={providerImage}
-          onClose={onClose}
-        />
-        <div style={noAvailabilityStyle}>{error}</div>
-      </div>
+      <>
+        <style>{globalStyle}</style>
+        <div style={containerStyle}>
+          <MobileWidgetHeader
+            buttonText={buttonText}
+            accentColor={accentColor}
+            onClose={onClose}
+          />
+          <div
+            style={{
+              textAlign: "center",
+              padding: "24px 16px",
+              color: "#6B7280",
+            }}
+          >
+            {error}
+          </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <MobileWidgetHeader
-        buttonText={buttonText}
-        accentColor={accentColor}
-        providerName={providerName}
-        providerAddress={providerAddress}
-        providerImage={providerImage}
-        onClose={onClose}
-      />
+    <>
+      <style>{globalStyle}</style>
+      <div style={containerStyle}>
+        <MobileWidgetHeader
+          buttonText={buttonText}
+          accentColor={accentColor}
+          onClose={onClose}
+        />
 
-      <MobileDateSelector
-        availabilityData={availabilityData}
-        selectedDate={selectedDate}
-        onDateSelect={handleDateSelect}
-        theme={theme}
-        accentColor={accentColor}
-      />
+        <MobileDateSelector
+          availabilityData={availabilityData}
+          selectedDate={selectedDate}
+          onDateSelect={handleDateSelect}
+          theme={theme}
+          accentColor={accentColor}
+        />
 
-      <MobileTimeSlots
-        selectedDate={selectedDate}
-        timeSlots={timeSlots}
-        onBookSlot={handleBookSlot}
-        theme={theme}
-        accentColor={accentColor}
-      />
+        <MobileTimeSlots
+          selectedDate={selectedDate}
+          timeSlots={timeSlots}
+          onBookSlot={handleBookSlot}
+          theme={theme}
+          accentColor={accentColor}
+        />
 
-      <MobileWidgetFooter theme={theme} accentColor={accentColor} />
-    </div>
+        <MobileWidgetFooter theme={theme} accentColor={accentColor} />
+      </div>
+    </>
   );
 };
 

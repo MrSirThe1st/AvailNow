@@ -5,8 +5,14 @@ import FontSelector from "./FontSelector";
 import TextInputs from "./TextInputs";
 import NumberInputs from "./NumberInputs";
 import ColorPickers from "./ColorPickers";
+import PreviewModeToggle from "./PreviewModeToggle";
 
-const WidgetSettingsPanel = ({ settings, onSettingChange }) => {
+const WidgetSettingsPanel = ({
+  settings,
+  onSettingChange,
+  previewMode,
+  onPreviewModeChange,
+}) => {
   return (
     <div className="bg-gray-50 rounded-lg p-4 space-y-6">
       {/* Theme Toggle */}
@@ -56,6 +62,10 @@ const WidgetSettingsPanel = ({ settings, onSettingChange }) => {
         accentColor={settings.accentColor}
         textColor={settings.textColor}
         onColorChange={onSettingChange}
+      />
+      <PreviewModeToggle
+        previewMode={previewMode}
+        onToggle={onPreviewModeChange}
       />
     </div>
   );
