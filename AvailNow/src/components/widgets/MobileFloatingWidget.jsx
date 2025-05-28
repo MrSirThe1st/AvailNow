@@ -14,6 +14,7 @@ const MobileFloatingWidget = ({
   providerName = "",
   providerAddress = "",
   providerImage = "/api/placeholder/120/120",
+  companyLogo = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -60,6 +61,7 @@ const MobileFloatingWidget = ({
           providerAddress={providerAddress}
           providerImage={providerImage}
           onClose={toggleWidget}
+          companyLogo={companyLogo}
         />
       )}
     </>

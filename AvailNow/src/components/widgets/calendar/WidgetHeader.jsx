@@ -30,7 +30,6 @@ const WidgetHeader = ({
           alt={providerName || "Company logo"}
           style={styles.providerImage}
           onError={(e) => {
-            // Fallback to a default avatar if image fails to load
             e.target.src = "/api/placeholder/48/48";
           }}
         />

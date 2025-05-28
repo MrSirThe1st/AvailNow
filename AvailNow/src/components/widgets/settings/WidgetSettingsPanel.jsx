@@ -7,7 +7,7 @@ import TextInputs from "./TextInputs";
 import NumberInputs from "./NumberInputs";
 import ColorPickers from "./ColorPickers";
 import PreviewModeToggle from "./PreviewModeToggle";
-import ProfileImageUpload from "@/components/settings/ProfileImageUpload";
+import ProfileImageUpload from "../../settings/ProfileImageUpload";
 
 const WidgetSettingsPanel = ({
   settings,
@@ -75,10 +75,12 @@ const WidgetSettingsPanel = ({
       />
 
       {/* Preview Mode Toggle */}
-      <PreviewModeToggle
-        previewMode={previewMode}
-        onToggle={onPreviewModeChange}
-      />
+      {previewMode && onPreviewModeChange && (
+        <PreviewModeToggle
+          previewMode={previewMode}
+          onToggle={onPreviewModeChange}
+        />
+      )}
     </div>
   );
 };

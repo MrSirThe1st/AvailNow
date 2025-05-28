@@ -14,6 +14,7 @@ const FloatingWidget = ({
   providerName = "",
   providerAddress = "",
   providerImage = "",
+  companyLogo = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -102,6 +103,7 @@ const FloatingWidget = ({
             providerName={providerName}
             providerAddress={providerAddress}
             providerImage={providerImage}
+            companyLogo={companyLogo}
           />
         </div>
       )}
