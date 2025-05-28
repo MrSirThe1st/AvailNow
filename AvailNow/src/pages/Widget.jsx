@@ -28,7 +28,7 @@ const Widget = () => {
     fontFamily: "Public Sans",
     providerName: "Dr. Sarah Johnson",
     providerAddress: "123 Healthcare Blvd, Suite 300",
-    providerImage: "/api/placeholder/120/120",
+    companyLogo: null,
   });
   const [embedCode, setEmbedCode] = useState("");
 
@@ -45,7 +45,7 @@ const Widget = () => {
           providerName: settings.providerName || "Dr. Sarah Johnson",
           providerAddress:
             settings.providerAddress || "123 Healthcare Blvd, Suite 300",
-          providerImage: settings.providerImage || "/api/placeholder/120/120",
+          companyLogo: settings.companyLogo || null,
         });
       } catch (err) {
         console.error("Error loading widget settings:", err);
@@ -114,6 +114,7 @@ const Widget = () => {
       {/* Main Content */}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold">Widget Customization</h2>
           <button
             onClick={handleSaveSettings}
             disabled={loading}
@@ -126,25 +127,26 @@ const Widget = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Settings Panel */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Appearance Settings</h2>
+            <h3 className="text-lg font-semibold mb-4">Appearance Settings</h3>
             <WidgetSettingsPanel
               settings={widgetSettings}
               onSettingChange={handleSettingChange}
               previewMode={previewMode}
               onPreviewModeChange={setPreviewMode}
+              userId={user?.id}
             />
           </div>
 
           {/* Embed Code */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Embed Code</h2>
+            <h3 className="text-lg font-semibold mb-4">Embed Code</h3>
             <EmbedCodeDisplay embedCode={embedCode} />
 
             {/* Usage Instructions */}
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-900 mb-2">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">
                 How to use
-              </h3>
+              </h4>
               <ol className="text-sm text-gray-600 space-y-1">
                 <li>1. Copy the embed code above</li>
                 <li>2. Paste it into your website's HTML</li>

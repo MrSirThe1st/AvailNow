@@ -4,7 +4,6 @@ import { useAuth } from "../context/SupabaseAuthContext";
 import { getUserProfile } from "../lib/supabase";
 import SettingsNavigation from "../components/settings/SettingsNavigation";
 import ProfileTab from "../components/settings/ProfileTab";
-import SecurityTab from "../components/settings/SecurityTab";
 import BillingTab from "../components/settings/BillingTab";
 import NotificationsTab from "../components/settings/NotificationsTab";
 import DangerZoneTab from "../components/settings/DangerZoneTab";
@@ -66,8 +65,6 @@ const Settings = () => {
     switch (activeTab) {
       case "profile":
         return <ProfileTab {...commonProps} />;
-      case "security":
-        return <SecurityTab {...commonProps} />;
       case "billing":
         return <BillingTab {...commonProps} />;
       case "notifications":

@@ -1,4 +1,4 @@
-// src/components/widgets/EmbedWidget.jsx (Refactored)
+// src/components/widgets/EmbedWidget.jsx (Updated)
 import React, { useState } from "react";
 import { createStyles } from "./EmbedWidgetStyles";
 import { trackWidgetEvent } from "../../lib/widgetService";
@@ -23,7 +23,7 @@ const EmbedWidget = ({
   providerName = "Demo Provider",
   providerAddress = "123 Main Street",
   providerCity = "San Francisco, CA 94103",
-  providerImage = "/api/placeholder/120/120",
+  companyLogo = null,
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -98,7 +98,7 @@ const EmbedWidget = ({
           providerName={providerName}
           providerAddress={providerAddress}
           providerCity={providerCity}
-          providerImage={providerImage}
+          companyLogo={companyLogo}
           styles={styles}
         />
         <div style={styles.contentContainer}>
@@ -122,7 +122,7 @@ const EmbedWidget = ({
           providerName={providerName}
           providerAddress={providerAddress}
           providerCity={providerCity}
-          providerImage={providerImage}
+          companyLogo={companyLogo}
           styles={styles}
         />
         <div style={styles.contentContainer}>
@@ -142,7 +142,7 @@ const EmbedWidget = ({
         providerName={providerName}
         providerAddress={providerAddress}
         providerCity={providerCity}
-        providerImage={providerImage}
+        companyLogo={companyLogo}
         styles={styles}
       />
 

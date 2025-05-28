@@ -17,20 +17,41 @@ export const getWidgetSettings = async (userId) => {
       return getDefaultWidgetSettings();
     }
 
-    const { data, error } = await supabase
+    // Get widget settings
+    const { data: widgetData, error: widgetError } = await supabase
       .from("widget_settings")
-      .select(
-        "id, user_id, theme, accent_color, text_color, button_text, show_days, compact"
-      )
+      .select("*")
       .eq("user_id", userId)
-      .maybeSingle(); // Use maybeSingle instead of single
+      .maybeSingle();
 
-    if (error) {
-      console.warn("Error fetching widget settings:", error);
-      return getDefaultWidgetSettings();
+    if (widgetError) {
+      console.warn("Error fetching widget settings:", widgetError);
     }
 
-    return data || getDefaultWidgetSettings();
+    // Get user profile for company logo
+    const { data: profileData, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("company_logo, display_name")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (profileError) {
+      console.warn("Error fetching user profile:", profileError);
+    }
+
+    // Merge data with defaults
+    const defaultSettings = getDefaultWidgetSettings();
+    const mergedSettings = {
+      ...defaultSettings,
+      ...widgetData,
+      companyLogo: profileData?.company_logo || null,
+      providerName:
+        widgetData?.providerName ||
+        profileData?.display_name ||
+        defaultSettings.providerName,
+    };
+
+    return mergedSettings;
   } catch (error) {
     console.error("Error fetching widget settings:", error);
     return getDefaultWidgetSettings();
@@ -52,6 +73,9 @@ export const getDefaultWidgetSettings = () => {
     headerStyle: "modern",
     fontFamily: "system",
     borderRadius: "medium",
+    providerName: "Your Company",
+    providerAddress: "123 Business St, City, State",
+    companyLogo: null,
   };
 };
 
@@ -82,7 +106,7 @@ export const generateWidgetEmbedCode = (userId, settings) => {
     responsive: true,
     providerName: "${settingsToUse.providerName || ""}",
     providerAddress: "${settingsToUse.providerAddress || ""}",
-    providerImage: "${settingsToUse.providerImage || ""}"
+    companyLogo: "${settingsToUse.companyLogo || ""}"
   });
 </script>
 <!-- End AvailNow Widget -->`;
@@ -228,7 +252,10 @@ export const saveWidgetSettings = async (userId, settings) => {
   }
 
   try {
-    // Check if settings already exist for this user
+    // Separate company logo from widget settings
+    const { companyLogo, ...widgetSettings } = settings;
+
+    // Check if widget settings already exist for this user
     const { data: existingSettings, error: checkError } = await supabase
       .from("widget_settings")
       .select("id")
@@ -241,9 +268,9 @@ export const saveWidgetSettings = async (userId, settings) => {
 
     const now = new Date().toISOString();
 
-    // Add user_id and updated timestamp
+    // Add user_id and updated timestamp to widget settings
     const settingsWithMeta = {
-      ...settings,
+      ...widgetSettings,
       user_id: userId,
       updated_at: now,
     };
@@ -275,7 +302,22 @@ export const saveWidgetSettings = async (userId, settings) => {
       result = data;
     }
 
-    return result;
+    // Update user profile with company logo if provided
+    if (companyLogo !== undefined) {
+      const { error: profileError } = await supabase
+        .from("user_profiles")
+        .upsert({
+          user_id: userId,
+          company_logo: companyLogo,
+          updated_at: now,
+        });
+
+      if (profileError) {
+        console.warn("Failed to update company logo:", profileError);
+      }
+    }
+
+    return { ...result, companyLogo };
   } catch (error) {
     console.error("Error saving widget settings:", error);
     throw error;
@@ -283,7 +325,7 @@ export const saveWidgetSettings = async (userId, settings) => {
 };
 
 /**
- * Get user profile data, including display name and address
+ * Get user profile data, including display name and company logo
  * @param {string} userId - Supabase user ID
  * @returns {Promise<Object>} - User profile data
  */

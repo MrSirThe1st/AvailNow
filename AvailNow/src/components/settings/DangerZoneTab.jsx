@@ -52,44 +52,6 @@ const DangerZoneTab = ({ user }) => {
     }
   };
 
-  const handleClearData = async (dataType) => {
-    if (!user?.id) return;
-
-    const confirmMessage = `Are you sure you want to clear all ${dataType}? This action cannot be undone.`;
-    if (!window.confirm(confirmMessage)) return;
-
-    try {
-      let table = "";
-      switch (dataType) {
-        case "availability slots":
-          table = "availability_slots";
-          break;
-        case "widget settings":
-          table = "widget_settings";
-          break;
-        case "calendar settings":
-          table = "calendar_settings";
-          break;
-        case "analytics data":
-          table = "widget_stats";
-          break;
-        default:
-          return;
-      }
-
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      toast.success(`${dataType} cleared successfully`);
-    } catch (error) {
-      console.error(`Error clearing ${dataType}:`, error);
-      toast.error(`Failed to clear ${dataType}`);
-    }
-  };
 
   const DeleteConfirmationModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

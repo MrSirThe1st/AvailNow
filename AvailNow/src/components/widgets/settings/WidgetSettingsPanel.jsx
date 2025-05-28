@@ -1,3 +1,4 @@
+// src/components/widgets/settings/WidgetSettingsPanel.jsx
 import React from "react";
 import ThemeToggle from "./ThemeToggle";
 import ColorPresets from "./ColorPresets";
@@ -6,12 +7,14 @@ import TextInputs from "./TextInputs";
 import NumberInputs from "./NumberInputs";
 import ColorPickers from "./ColorPickers";
 import PreviewModeToggle from "./PreviewModeToggle";
+import ProfileImageUpload from "@/components/settings/ProfileImageUpload";
 
 const WidgetSettingsPanel = ({
   settings,
   onSettingChange,
   previewMode,
   onPreviewModeChange,
+  userId,
 }) => {
   return (
     <div className="bg-gray-50 rounded-lg p-4 space-y-6">
@@ -24,6 +27,13 @@ const WidgetSettingsPanel = ({
             settings.theme === "light" ? "dark" : "light"
           )
         }
+      />
+
+      {/* Company Logo Upload */}
+      <ProfileImageUpload
+        currentImage={settings.companyLogo}
+        onImageChange={(imageUrl) => onSettingChange("companyLogo", imageUrl)}
+        userId={userId}
       />
 
       {/* Color Presets */}
@@ -63,6 +73,8 @@ const WidgetSettingsPanel = ({
         textColor={settings.textColor}
         onColorChange={onSettingChange}
       />
+
+      {/* Preview Mode Toggle */}
       <PreviewModeToggle
         previewMode={previewMode}
         onToggle={onPreviewModeChange}

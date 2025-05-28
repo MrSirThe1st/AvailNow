@@ -1,4 +1,3 @@
-// src/components/widgets/calendar/WidgetHeader.jsx
 import React from "react";
 
 const WidgetHeader = ({
@@ -7,9 +6,12 @@ const WidgetHeader = ({
   providerName,
   providerAddress,
   providerCity,
-  providerImage,
+  companyLogo,
   styles,
 }) => {
+  // Use company logo if available, otherwise fall back to placeholder
+  const logoSrc = companyLogo || "/api/placeholder/48/48";
+
   return (
     <div style={styles.header}>
       <div style={styles.headerTitleContainer}>
@@ -24,16 +26,23 @@ const WidgetHeader = ({
 
       <div style={styles.providerInfo}>
         <img
-          src={providerImage}
-          alt={providerName}
+          src={logoSrc}
+          alt={providerName || "Company logo"}
           style={styles.providerImage}
+          onError={(e) => {
+            // Fallback to a default avatar if image fails to load
+            e.target.src = "/api/placeholder/48/48";
+          }}
         />
         <div>
           <p style={styles.providerName}>{providerName}</p>
-          <p style={styles.providerAddress}>
-            <span style={{ marginRight: "4px" }}>📍</span>
-            {providerAddress}, {providerCity}
-          </p>
+          {providerAddress && (
+            <p style={styles.providerAddress}>
+              <span style={{ marginRight: "4px" }}>📍</span>
+              {providerAddress}
+              {providerCity && `, ${providerCity}`}
+            </p>
+          )}
         </div>
       </div>
     </div>
