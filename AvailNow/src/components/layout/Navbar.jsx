@@ -56,7 +56,7 @@ const Navbar = ({ profile }) => {
               <div className="h-8 w-8 rounded-md bg-[#748efe] text-white flex items-center justify-center mr-2">
                 <Calendar size={18} />
               </div>
-              <span className="font-bold text-lg text-gray-900">Book.ing</span>
+              <span className="font-bold text-lg text-gray-900">Available.Now</span>
             </Link>
 
             {/* Desktop Navigation */}
