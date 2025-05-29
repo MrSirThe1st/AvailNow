@@ -76,6 +76,7 @@ export const getDefaultWidgetSettings = () => {
     providerName: "Your Company",
     providerAddress: "123 Business St, City, State",
     companyLogo: null,
+    secondaryColor: "#00a8ff",
   };
 };
 
@@ -252,15 +253,13 @@ export const saveWidgetSettings = async (userId, settings) => {
   }
 
   try {
-    // Separate company logo from widget settings
     const { companyLogo, ...widgetSettings } = settings;
 
-    // Check if widget settings already exist for this user
     const { data: existingSettings, error: checkError } = await supabase
       .from("widget_settings")
       .select("id")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (checkError && checkError.code !== "PGRST116") {
       throw checkError;
@@ -268,10 +267,20 @@ export const saveWidgetSettings = async (userId, settings) => {
 
     const now = new Date().toISOString();
 
-    // Add user_id and updated timestamp to widget settings
-    const settingsWithMeta = {
-      ...widgetSettings,
+    const dbWidgetSettings = {
       user_id: userId,
+      theme: widgetSettings.theme,
+      accentColor: widgetSettings.accentColor,
+      secondaryColor: widgetSettings.secondaryColor,
+      textColor: widgetSettings.textColor,
+      buttonText: widgetSettings.buttonText,
+      showDays: widgetSettings.showDays,
+      compact: widgetSettings.compact,
+      headerStyle: widgetSettings.headerStyle,
+      fontFamily: widgetSettings.fontFamily,
+      borderRadius: widgetSettings.borderRadius,
+      providerName: widgetSettings.providerName,
+      providerAddress: widgetSettings.providerAddress,
       updated_at: now,
     };
 
@@ -281,7 +290,7 @@ export const saveWidgetSettings = async (userId, settings) => {
       // Update existing settings
       const { data, error } = await supabase
         .from("widget_settings")
-        .update(settingsWithMeta)
+        .update(dbWidgetSettings)
         .eq("id", existingSettings.id)
         .select()
         .single();
@@ -290,11 +299,11 @@ export const saveWidgetSettings = async (userId, settings) => {
       result = data;
     } else {
       // Insert new settings
-      settingsWithMeta.created_at = now;
+      dbWidgetSettings.created_at = now;
 
       const { data, error } = await supabase
         .from("widget_settings")
-        .insert(settingsWithMeta)
+        .insert(dbWidgetSettings)
         .select()
         .single();
 
@@ -302,13 +311,13 @@ export const saveWidgetSettings = async (userId, settings) => {
       result = data;
     }
 
-    // Update user profile with company logo if provided
+    // Handle company logo in user_profiles if provided
     if (companyLogo !== undefined) {
       const { error: profileError } = await supabase
         .from("user_profiles")
         .upsert({
           user_id: userId,
-          company_logo: companyLogo,
+          avatar_url: companyLogo,
           updated_at: now,
         });
 
@@ -317,7 +326,11 @@ export const saveWidgetSettings = async (userId, settings) => {
       }
     }
 
-    return { ...result, companyLogo };
+    return {
+      ...result,
+      companyLogo:
+        companyLogo !== undefined ? companyLogo : settings.companyLogo,
+    };
   } catch (error) {
     console.error("Error saving widget settings:", error);
     throw error;
