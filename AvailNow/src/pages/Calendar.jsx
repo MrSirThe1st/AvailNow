@@ -1,33 +1,38 @@
 // src/pages/Calendar.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import { Loader, AlertTriangle } from "lucide-react";
+import { Loader, AlertTriangle, Trash2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CalendarView from "../components/calendar/CalendarView";
 import CalendarIntegration from "../components/calendar/CalendarIntegration";
 import {
   handleCalendarCallback,
+  disconnectCalendar,
   CALENDAR_PROVIDERS,
 } from "../lib/calendarService";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { supabase } from "../lib/supabase";
 import authService from "../lib/authService";
 import { useCalendar } from "../context/CalendarContext";
+import toast from "react-hot-toast";
 
 const Calendar = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768); // Check if mobile screen
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [calendarSettings, setCalendarSettings] = useState(null);
   const [connectedCalendars, setConnectedCalendars] = useState([]);
   const [activeCalendar, setActiveCalendar] = useState(null);
   const [calendarsList, setCalendarsList] = useState([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [calendarToDelete, setCalendarToDelete] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [callbackProcessing, setCallbackProcessing] = useState(false);
   const [callbackError, setCallbackError] = useState(null);
+  const [deletingCalendar, setDeletingCalendar] = useState(false);
 
   const handleSetActiveCalendar = async (provider) => {
     setActiveCalendar(provider);
@@ -110,6 +115,9 @@ const Calendar = () => {
             // Set the newly connected calendar as active
             setActiveCalendar(provider);
             await saveActiveCalendar(user.id, provider);
+            toast.success(
+              `${provider === "google" ? "Google Calendar" : "Microsoft Outlook"} connected successfully!`
+            );
           }
 
           setCallbackError(null);
@@ -118,6 +126,7 @@ const Calendar = () => {
           setCallbackError(
             "Failed to connect calendar: " + (err.message || "Unknown error")
           );
+          toast.error("Failed to connect calendar");
         } finally {
           setCallbackProcessing(false);
           localStorage.removeItem("calendarAuthProvider");
@@ -318,6 +327,102 @@ const Calendar = () => {
     }
   };
 
+  // Handle calendar deletion
+  const handleDeleteCalendar = async (provider) => {
+    setCalendarToDelete(provider);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteCalendar = async () => {
+    if (!calendarToDelete || !user?.id) return;
+
+    try {
+      setDeletingCalendar(true);
+
+      // Disconnect the calendar using the service
+      await disconnectCalendar(user.id, calendarToDelete);
+
+      // Remove from local state
+      setConnectedCalendars((prev) =>
+        prev.filter((cal) => cal.provider !== calendarToDelete)
+      );
+
+      setCalendarsList((prev) =>
+        prev.filter((cal) => cal.provider !== calendarToDelete)
+      );
+
+      // If this was the active calendar, clear it
+      if (activeCalendar === calendarToDelete) {
+        setActiveCalendar(null);
+        await saveActiveCalendar(user.id, null);
+      }
+
+      toast.success(
+        `${calendarToDelete === "google" ? "Google Calendar" : "Microsoft Outlook"} disconnected successfully`
+      );
+
+      setShowDeleteModal(false);
+      setCalendarToDelete(null);
+    } catch (err) {
+      console.error("Error deleting calendar:", err);
+      toast.error("Failed to disconnect calendar");
+    } finally {
+      setDeletingCalendar(false);
+    }
+  };
+
+  // Delete confirmation modal
+  const DeleteConfirmationModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex items-center mb-4">
+          <AlertTriangle className="w-6 h-6 text-red-500 mr-3" />
+          <h3 className="text-lg font-semibold">Disconnect Calendar</h3>
+        </div>
+
+        <p className="text-gray-600 mb-4">
+          Are you sure you want to disconnect your{" "}
+          {calendarToDelete === "google"
+            ? "Google Calendar"
+            : "Microsoft Outlook"}{" "}
+          integration?
+        </p>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+          <p className="text-sm text-yellow-700">
+            This will remove access to your calendar events and stop syncing
+            availability data.
+          </p>
+        </div>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => {
+              setShowDeleteModal(false);
+              setCalendarToDelete(null);
+            }}
+            disabled={deletingCalendar}
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmDeleteCalendar}
+            disabled={deletingCalendar}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+          >
+            {deletingCalendar ? (
+              <Loader className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // If user is not authenticated, show loading or redirect
   if (!user) {
     return (
@@ -361,32 +466,43 @@ const Calendar = () => {
         </div>
       )}
 
-      {/* Connected Calendars Display with Toggle */}
+      {/* Connected Calendars Display with Toggle and Delete */}
       <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Google Calendar Status */}
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold">Google Calendar:</h3>
-            {connectedCalendars.some((cal) => cal.provider === "google") ? (
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={activeCalendar === "google"}
-                  onChange={() => toggleCalendar("google")}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            ) : (
-              <button
-                onClick={() => setShowCalendarModal(true)}
-                className="bg-blue-500 text-white px-4 py-1 rounded"
-              >
-                Connect
-              </button>
-            )}
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">Google Calendar</h3>
+            <div className="flex items-center space-x-2">
+              {connectedCalendars.some((cal) => cal.provider === "google") ? (
+                <>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={activeCalendar === "google"}
+                      onChange={() => toggleCalendar("google")}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                  <button
+                    onClick={() => handleDeleteCalendar("google")}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded"
+                    title="Disconnect Google Calendar"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowCalendarModal(true)}
+                  className="bg-blue-500 text-white px-4 py-1 rounded"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
           </div>
-          <p className="mt-2">
+          <p className="text-sm">
             Status:{" "}
             {connectedCalendars.some((cal) => cal.provider === "google")
               ? activeCalendar === "google"
@@ -398,28 +514,39 @@ const Calendar = () => {
 
         {/* Outlook Calendar Status */}
         <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold">Microsoft Outlook:</h3>
-            {connectedCalendars.some((cal) => cal.provider === "outlook") ? (
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={activeCalendar === "outlook"}
-                  onChange={() => toggleCalendar("outlook")}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            ) : (
-              <button
-                onClick={() => setShowCalendarModal(true)}
-                className="bg-indigo-500 text-white px-4 py-1 rounded"
-              >
-                Connect
-              </button>
-            )}
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">Microsoft Outlook</h3>
+            <div className="flex items-center space-x-2">
+              {connectedCalendars.some((cal) => cal.provider === "outlook") ? (
+                <>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={activeCalendar === "outlook"}
+                      onChange={() => toggleCalendar("outlook")}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                  <button
+                    onClick={() => handleDeleteCalendar("outlook")}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded"
+                    title="Disconnect Microsoft Outlook"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowCalendarModal(true)}
+                  className="bg-indigo-500 text-white px-4 py-1 rounded"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
           </div>
-          <p className="mt-2">
+          <p className="text-sm">
             Status:{" "}
             {connectedCalendars.some((cal) => cal.provider === "outlook")
               ? activeCalendar === "outlook"
@@ -452,6 +579,9 @@ const Calendar = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && <DeleteConfirmationModal />}
     </div>
   );
 };
