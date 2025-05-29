@@ -5,7 +5,6 @@ import { getUserProfile } from "../lib/supabase";
 import SettingsNavigation from "../components/settings/SettingsNavigation";
 import ProfileTab from "../components/settings/ProfileTab";
 import BillingTab from "../components/settings/BillingTab";
-import NotificationsTab from "../components/settings/NotificationsTab";
 import DangerZoneTab from "../components/settings/DangerZoneTab";
 import { Loader } from "lucide-react";
 import toast from "react-hot-toast";
@@ -68,8 +67,6 @@ const Settings = () => {
       case "billing":
         return <BillingTab {...commonProps} />;
       case "notifications":
-        return <NotificationsTab {...commonProps} />;
-      case "danger":
         return <DangerZoneTab {...commonProps} />;
       default:
         return <ProfileTab {...commonProps} />;
