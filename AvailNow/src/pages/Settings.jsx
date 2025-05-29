@@ -62,14 +62,12 @@ const Settings = () => {
     const commonProps = { user, profile, setProfile };
 
     switch (activeTab) {
-      case "profile":
-        return <ProfileTab {...commonProps} />;
       case "billing":
         return <BillingTab {...commonProps} />;
-      case "notifications":
+      case "danger":
         return <DangerZoneTab {...commonProps} />;
       default:
-        return <ProfileTab {...commonProps} />;
+        return <BillingTab {...commonProps} />;
     }
   };
 

@@ -10,7 +10,6 @@ import {
 
 const SettingsNavigation = ({ activeTab, setActiveTab }) => {
   const tabs = [
-    { id: "profile", label: "Profile", icon: <User size={20} /> },
     { id: "billing", label: "Billing", icon: <CreditCard size={20} /> },
     { id: "danger", label: "Danger Zone", icon: <AlertTriangle size={20} /> },
   ];
