@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  CreditCard,
 } from "lucide-react";
 import { useAuth } from "../../context/SupabaseAuthContext";
 
@@ -25,6 +26,7 @@ const Navbar = ({ profile }) => {
     { path: "/calendar", label: "Calendar", icon: <Calendar size={20} /> },
     { path: "/widget", label: "Widget", icon: <Code size={20} /> },
     { path: "/settings", label: "Settings", icon: <Settings size={20} /> },
+    { path: "/Billing", label: "Billing", icon: <CreditCard size={20} /> },
   ];
 
   const handleSignOut = async () => {

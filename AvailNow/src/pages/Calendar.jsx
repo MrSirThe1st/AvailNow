@@ -13,6 +13,7 @@ import { useAuth } from "../context/SupabaseAuthContext";
 import { supabase } from "../lib/supabase";
 import authService from "../lib/authService";
 import { useCalendar } from "../context/CalendarContext";
+import CalendarCarousel from "../components/calendar/CalendarCarousel";
 import toast from "react-hot-toast";
 
 const Calendar = () => {
@@ -467,95 +468,15 @@ const Calendar = () => {
       )}
 
       {/* Connected Calendars Display with Toggle and Delete */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Google Calendar Status */}
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold">Google Calendar</h3>
-            <div className="flex items-center space-x-2">
-              {connectedCalendars.some((cal) => cal.provider === "google") ? (
-                <>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={activeCalendar === "google"}
-                      onChange={() => toggleCalendar("google")}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                  <button
-                    onClick={() => handleDeleteCalendar("google")}
-                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded"
-                    title="Disconnect Google Calendar"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setShowCalendarModal(true)}
-                  className="bg-blue-500 text-white px-4 py-1 rounded"
-                >
-                  Connect
-                </button>
-              )}
-            </div>
-          </div>
-          <p className="text-sm">
-            Status:{" "}
-            {connectedCalendars.some((cal) => cal.provider === "google")
-              ? activeCalendar === "google"
-                ? "✅ Active"
-                : "⚪ Connected (Inactive)"
-              : "❌ Not connected"}
-          </p>
-        </div>
-
-        {/* Outlook Calendar Status */}
-        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold">Microsoft Outlook</h3>
-            <div className="flex items-center space-x-2">
-              {connectedCalendars.some((cal) => cal.provider === "outlook") ? (
-                <>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={activeCalendar === "outlook"}
-                      onChange={() => toggleCalendar("outlook")}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                  <button
-                    onClick={() => handleDeleteCalendar("outlook")}
-                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded"
-                    title="Disconnect Microsoft Outlook"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setShowCalendarModal(true)}
-                  className="bg-indigo-500 text-white px-4 py-1 rounded"
-                >
-                  Connect
-                </button>
-              )}
-            </div>
-          </div>
-          <p className="text-sm">
-            Status:{" "}
-            {connectedCalendars.some((cal) => cal.provider === "outlook")
-              ? activeCalendar === "outlook"
-                ? "✅ Active"
-                : "⚪ Connected (Inactive)"
-              : "❌ Not connected"}
-          </p>
-        </div>
-      </div>
+      <div className="mt-10"></div>
+      <CalendarCarousel
+        connectedCalendars={connectedCalendars}
+        activeCalendar={activeCalendar}
+        onToggleCalendar={toggleCalendar}
+        onDeleteCalendar={handleDeleteCalendar}
+        onConnectCalendar={() => setShowCalendarModal(true)}
+      />
+      <div/>
 
       {/* Desktop Calendar View */}
       <CalendarView

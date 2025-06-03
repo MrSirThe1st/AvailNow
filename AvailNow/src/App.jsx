@@ -7,6 +7,7 @@ import ProtectedRoute from "./pages/Auth/ProtectedRoute";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
+import Billing from "./pages/Billing";
 import Calendar from "./pages/Calendar";
 import Widget from "./pages/Widget";
 import Settings from "./pages/Settings";
@@ -45,6 +46,10 @@ function App() {
             {
               path: "account",
               element: <Account />,
+            },
+            {
+              path: "billing",
+              element: <Billing />,
             },
           ],
         },
