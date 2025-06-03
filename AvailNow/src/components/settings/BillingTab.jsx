@@ -298,9 +298,6 @@ const BillingTab = ({ user }) => {
           )}
         </div>
       </div>
-
-      {/* Subscription Details */}
-     
     </div>
   );
 };

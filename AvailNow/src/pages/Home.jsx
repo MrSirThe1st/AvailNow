@@ -18,7 +18,7 @@ import {
   CloudLightning,
 } from "lucide-react";
 
-const Dashboard = () => {
+const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -642,4 +642,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default Home;

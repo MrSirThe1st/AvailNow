@@ -6,7 +6,6 @@ import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./pages/Auth/ProtectedRoute";
 
 // Pages
-import Dashboard from "./pages/Dashboard";
 import Billing from "./pages/Billing";
 import Calendar from "./pages/Calendar";
 import Widget from "./pages/Widget";
@@ -17,6 +16,7 @@ import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 import ResetPassword from "./pages/Auth/ResetPassword";
 import OAuthCallback from "./pages/Auth/OAuthCallback";
+import Home from "./pages/Home";
 
 function App() {
   const router = createBrowserRouter([
@@ -29,7 +29,7 @@ function App() {
           children: [
             {
               index: true,
-              element: <Dashboard />,
+              element: <Home />,
             },
             {
               path: "calendar",
