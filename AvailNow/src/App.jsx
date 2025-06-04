@@ -15,11 +15,8 @@ import Register from "./pages/Auth/Register";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 import ResetPassword from "./pages/Auth/ResetPassword";
 import OAuthCallback from "./pages/Auth/OAuthCallback";
-import Home from "./pages/Home";
-import Pricing from "./pages/Billing";
 import Landing from "./pages/Landing";
 import Billing from "./pages/Billing";
-
 
 function App() {
   const router = createBrowserRouter([
@@ -28,16 +25,38 @@ function App() {
       element: <Landing />,
     },
     {
-      path: "/pricing",
-      element: <Pricing />,
+      path: "/login",
+      element: <Login />,
     },
     {
-      path: "/",
+      path: "/register",
+      element: <Register />,
+    },
+    {
+      path: "/forgot-password",
+      element: <ForgotPassword />,
+    },
+    {
+      path: "/reset-password",
+      element: <ResetPassword />,
+    },
+    {
+      path: "/auth/callback",
+      element: <OAuthCallback />,
+    },
+    // Protected routes - different base path
+    {
+      path: "/app",
       element: <ProtectedRoute />,
       children: [
         {
+          path: "",
           element: <Layout />,
           children: [
+            {
+              index: true, // This makes /app redirect to /app/calendar
+              element: <Calendar />,
+            },
             {
               path: "calendar",
               element: <Calendar />,
@@ -61,27 +80,6 @@ function App() {
           ],
         },
       ],
-    },
-    {
-      path: "/login",
-      element: <Login />,
-    },
-    {
-      path: "/register",
-      element: <Register />,
-    },
-    {
-      path: "/forgot-password",
-      element: <ForgotPassword />,
-    },
-    {
-      path: "/reset-password",
-      element: <ResetPassword />,
-    },
-    {
-      // Auth callback route for OAuth providers
-      path: "/auth/callback",
-      element: <OAuthCallback />,
     },
   ]);
 

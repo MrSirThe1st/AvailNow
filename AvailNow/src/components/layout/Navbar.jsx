@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Home,
   Calendar,
   Code,
   Settings,
   User,
-  Bell,
   LogOut,
   Menu,
   X,
   CreditCard,
+
 } from "lucide-react";
 import { useAuth } from "../../context/SupabaseAuthContext";
 
@@ -22,11 +21,10 @@ const Navbar = ({ profile }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const navItems = [
-    { path: "/", label: "Calendar", icon: <Calendar size={20} /> },
-    { path: "/widget", label: "Widget", icon: <Code size={20} /> },
-    { path: "/pricing", label: "Pricing", icon: <DollarSign size={20} /> },
-    { path: "/billing", label: "billing", icon: <DollarSign size={24} /> },
-    { path: "/settings", label: "Settings", icon: <Settings size={20} /> },
+    { path: "/app/calendar", label: "Calendar", icon: <Calendar size={20} /> },
+    { path: "/app/widget", label: "Widget", icon: <Code size={20} /> },
+    { path: "/app/billing", label: "billing", icon: <CreditCard size={20} /> },
+    { path: "/app/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
   const handleSignOut = async () => {
@@ -82,11 +80,6 @@ const Navbar = ({ profile }) => {
 
           {/* Desktop right navigation */}
           <div className="hidden md:flex md:items-center md:space-x-2">
-            <button className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-
             <div className="relative user-dropdown">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}

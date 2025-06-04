@@ -15,7 +15,7 @@ const ProtectedRoute = () => {
   }
 
   if (!user) {
-    return <Navigate to="/landing" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;
