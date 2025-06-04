@@ -6,7 +6,6 @@ import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./pages/Auth/ProtectedRoute";
 
 // Pages
-import Billing from "./pages/Billing";
 import Calendar from "./pages/Calendar";
 import Widget from "./pages/Widget";
 import Settings from "./pages/Settings";
@@ -17,9 +16,21 @@ import ForgotPassword from "./pages/Auth/ForgotPassword";
 import ResetPassword from "./pages/Auth/ResetPassword";
 import OAuthCallback from "./pages/Auth/OAuthCallback";
 import Home from "./pages/Home";
+import Pricing from "./pages/Billing";
+import Landing from "./pages/Landing";
+import Billing from "./pages/Billing";
+
 
 function App() {
   const router = createBrowserRouter([
+    {
+      path: "/",
+      element: <Landing />,
+    },
+    {
+      path: "/pricing",
+      element: <Pricing />,
+    },
     {
       path: "/",
       element: <ProtectedRoute />,
@@ -27,10 +38,6 @@ function App() {
         {
           element: <Layout />,
           children: [
-            {
-              index: true,
-              element: <Home />,
-            },
             {
               path: "calendar",
               element: <Calendar />,

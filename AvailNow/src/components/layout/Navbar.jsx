@@ -22,11 +22,11 @@ const Navbar = ({ profile }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const navItems = [
-    { path: "/", label: "Home", icon: <Home size={20} /> },
-    { path: "/calendar", label: "Calendar", icon: <Calendar size={20} /> },
+    { path: "/", label: "Calendar", icon: <Calendar size={20} /> },
     { path: "/widget", label: "Widget", icon: <Code size={20} /> },
+    { path: "/pricing", label: "Pricing", icon: <DollarSign size={20} /> },
+    { path: "/billing", label: "billing", icon: <DollarSign size={24} /> },
     { path: "/settings", label: "Settings", icon: <Settings size={20} /> },
-    { path: "/Billing", label: "Billing", icon: <CreditCard size={20} /> },
   ];
 
   const handleSignOut = async () => {

@@ -1,6 +1,6 @@
 // src/lib/payfast.js
 /**
- * PayFast Integration Service - Simple Monthly Subscription
+ * PayFast Integration Service - Monthly Subscription and Lifetime Payment
  */
 
 import crypto from "crypto";
@@ -22,7 +22,8 @@ const PAYFAST_API_URL =
     ? "https://api.sandbox.payfast.co.za"
     : "https://api.payfast.co.za";
 
-const SUBSCRIPTION_AMOUNT = 30.0; // R30 per month
+const MONTHLY_AMOUNT = 30.0; // R30 per month
+const LIFETIME_AMOUNT = 400.0; // R400 one-time
 
 /**
  * Generate PayFast signature
@@ -47,29 +48,44 @@ const generateSignature = (data, passphrase = "") => {
  */
 export const generatePayFastFormData = (userId, userEmail, options = {}) => {
   const baseUrl = window.location.origin;
+  const planType = options.planType || "monthly";
+  const isLifetime = planType === "lifetime";
+
+  const amount = isLifetime ? LIFETIME_AMOUNT : MONTHLY_AMOUNT;
+  const itemName = isLifetime
+    ? "AvailNow Lifetime Access"
+    : "AvailNow Monthly Subscription";
+  const itemDescription = isLifetime
+    ? "Lifetime access to AvailNow with all features"
+    : "Monthly subscription to AvailNow";
 
   const data = {
     merchant_id: PAYFAST_MERCHANT_ID,
     merchant_key: PAYFAST_MERCHANT_KEY,
-    amount: SUBSCRIPTION_AMOUNT.toFixed(2),
-    item_name: "AvailNow Monthly Subscription",
-    item_description: "Monthly subscription to AvailNow",
-    subscription_type: 1,
-    recurring_amount: SUBSCRIPTION_AMOUNT.toFixed(2),
-    frequency: 3, // Monthly
-    cycles: 0, // Indefinite
-    return_url: `${baseUrl}/billing?status=success`,
-    cancel_url: `${baseUrl}/billing?status=cancelled`,
-    notify_url: `${baseUrl}/api/payfast/webhook`,
+    amount: amount.toFixed(2),
+    item_name: itemName,
+    item_description: itemDescription,
     name_first: options.firstName || "User",
     name_last: options.lastName || "Name",
     email_address: userEmail,
     custom_str1: userId,
-    custom_str2: new Date().toISOString(),
-    m_payment_id: `subscription_${userId}_${Date.now()}`,
+    custom_str2: planType,
+    custom_str3: new Date().toISOString(),
+    m_payment_id: `${planType}_${userId}_${Date.now()}`,
+    return_url: `${baseUrl}/billing?status=success&plan=${planType}`,
+    cancel_url: `${baseUrl}/billing?status=cancelled`,
+    notify_url: `${baseUrl}/api/payfast/webhook`,
     email_confirmation: 1,
     confirmation_address: userEmail,
   };
+
+  // Add subscription-specific fields only for monthly plan
+  if (!isLifetime) {
+    data.subscription_type = 1;
+    data.recurring_amount = MONTHLY_AMOUNT.toFixed(2);
+    data.frequency = 3; // Monthly
+    data.cycles = 0; // Indefinite
+  }
 
   data.signature = generateSignature(data, PAYFAST_PASSPHRASE);
   return data;
@@ -121,11 +137,17 @@ export const handlePayFastWebhook = async (webhookData) => {
       return { success: false, error: "Invalid signature" };
     }
 
-    const { payment_status, custom_str1: userId } = webhookData;
+    const {
+      payment_status,
+      custom_str1: userId,
+      custom_str2: planType,
+      token,
+      pf_payment_id,
+    } = webhookData;
 
     switch (payment_status) {
       case "COMPLETE":
-        return handlePaymentComplete(webhookData, userId);
+        return handlePaymentComplete(webhookData, userId, planType);
       case "FAILED":
         return handlePaymentFailed(webhookData, userId);
       case "CANCELLED":
@@ -139,21 +161,34 @@ export const handlePayFastWebhook = async (webhookData) => {
   }
 };
 
-const handlePaymentComplete = async (data, userId) => {
-  console.log("Payment completed for user:", userId);
+const handlePaymentComplete = async (data, userId, planType) => {
+  console.log("Payment completed for user:", userId, "Plan:", planType);
 
   try {
-    const { error } = await supabase.from("user_profiles").upsert({
+    const isLifetime = planType === "lifetime";
+
+    const updateData = {
       user_id: userId,
       subscription_id: data.pf_payment_id,
-      subscription_status: "active",
-      subscription_token: data.token,
+      subscription_status: isLifetime ? "lifetime" : "active",
       trial_ends_at: null,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    // Only add subscription token for recurring payments
+    if (!isLifetime && data.token) {
+      updateData.subscription_token = data.token;
+    }
+
+    const { error } = await supabase.from("user_profiles").upsert(updateData);
 
     if (error) throw error;
-    return { success: true, message: "Subscription activated" };
+
+    const message = isLifetime
+      ? "Lifetime access activated"
+      : "Monthly subscription activated";
+
+    return { success: true, message };
   } catch (error) {
     console.error("Error updating subscription:", error);
     return { success: false, error: "Database update failed" };
@@ -201,7 +236,7 @@ const handlePaymentCancelled = async (data, userId) => {
 };
 
 /**
- * Cancel subscription
+ * Cancel subscription (only applicable to monthly subscriptions)
  */
 export const cancelPayFastSubscription = async (subscriptionToken) => {
   try {
@@ -231,7 +266,7 @@ export const cancelPayFastSubscription = async (subscriptionToken) => {
 };
 
 /**
- * Get subscription details
+ * Get subscription details (only applicable to monthly subscriptions)
  */
 export const getPayFastSubscription = async (subscriptionToken) => {
   try {
@@ -259,10 +294,62 @@ export const getPayFastSubscription = async (subscriptionToken) => {
   }
 };
 
+/**
+ * Check if user has valid access (trial, active subscription, or lifetime)
+ */
+export const checkUserAccess = async (userId) => {
+  try {
+    const { data: userProfile, error } = await supabase
+      .from("user_profiles")
+      .select("subscription_status, trial_ends_at, created_at")
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error checking user access:", error);
+      return { hasAccess: false, reason: "error" };
+    }
+
+    if (!userProfile) {
+      return { hasAccess: false, reason: "no_profile" };
+    }
+
+    const { subscription_status, trial_ends_at } = userProfile;
+
+    // Lifetime access
+    if (subscription_status === "lifetime") {
+      return { hasAccess: true, reason: "lifetime" };
+    }
+
+    // Active subscription
+    if (subscription_status === "active") {
+      return { hasAccess: true, reason: "active" };
+    }
+
+    // Trial access
+    if (subscription_status === "trial" && trial_ends_at) {
+      const trialEnd = new Date(trial_ends_at);
+      const now = new Date();
+
+      if (trialEnd > now) {
+        return { hasAccess: true, reason: "trial" };
+      } else {
+        return { hasAccess: false, reason: "trial_expired" };
+      }
+    }
+
+    return { hasAccess: false, reason: "no_subscription" };
+  } catch (error) {
+    console.error("Error in checkUserAccess:", error);
+    return { hasAccess: false, reason: "error" };
+  }
+};
+
 export default {
   openPayFastCheckout,
   handlePayFastWebhook,
   cancelPayFastSubscription,
   getPayFastSubscription,
   verifyPayFastSignature,
+  checkUserAccess,
 };

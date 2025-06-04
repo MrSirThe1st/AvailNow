@@ -15,7 +15,7 @@ import {
 import { openPayFastCheckout } from "../lib/payfast";
 import toast from "react-hot-toast";
 
-const Billing = () => {
+const Pricing = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState("monthly");
@@ -551,4 +551,4 @@ const Billing = () => {
   );
 };
 
-export default Billing;
+export default Pricing;
