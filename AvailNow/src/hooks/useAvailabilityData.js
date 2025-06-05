@@ -4,17 +4,27 @@ import { formatDate, doTimesOverlap } from "../lib/calendarUtils";
 import {
   trackWidgetEvent,
   getAvailabilityForDateRange,
+  generateTimeSlots,
+  isWithinBusinessHours,
+  isWorkingDay,
 } from "../lib/widgetService";
 import { fetchCalendarEvents } from "../lib/calendarService";
 import { supabase } from "../lib/supabase";
 
 /**
- * Custom hook for managing availability data in the widget
+ * Custom hook for managing availability data with business hours support
  * @param {string} userId - User ID
  * @param {Date} currentMonth - Current month being viewed
+ * @param {Object} businessHours - Business hours configuration
+ * @param {number} timeInterval - Time slot interval in minutes
  * @returns {Object} - Availability data and related functions
  */
-export const useAvailabilityData = (userId, currentMonth) => {
+export const useAvailabilityData = (
+  userId,
+  currentMonth,
+  businessHours,
+  timeInterval = 30
+) => {
   const [loading, setLoading] = useState(true);
   const [availabilityData, setAvailabilityData] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -70,11 +80,11 @@ export const useAvailabilityData = (userId, currentMonth) => {
     return result;
   };
 
-  // Generate availability pattern for a date
+  // Generate availability pattern for a date using business hours
   const generateAvailabilityPattern = (date, events, availabilitySlots) => {
-    // If it's a weekend, return all unavailable
-    if (date.getDay() === 0 || date.getDay() === 6) {
-      return Array(8).fill(false);
+    // Check if it's a working day
+    if (!isWorkingDay(date, businessHours.workingDays)) {
+      return Array(8).fill(false); // Return empty pattern for non-working days
     }
 
     // If it's in the past, return all unavailable
@@ -86,27 +96,48 @@ export const useAvailabilityData = (userId, currentMonth) => {
 
     const pattern = [];
 
-    // Business hours 9am to 5pm (8 hours)
-    for (let hour = 9; hour < 17; hour++) {
-      const hourStart = new Date(date);
-      hourStart.setHours(hour, 0, 0, 0);
+    // Generate time slots based on business hours and interval
+    const timeSlotOptions = generateTimeSlots(
+      businessHours.startTime,
+      businessHours.endTime,
+      timeInterval
+    );
 
-      const hourEnd = new Date(date);
-      hourEnd.setHours(hour + 1, 0, 0, 0);
+    // For each potential time slot, check availability
+    timeSlotOptions.forEach((timeSlot) => {
+      const [hour, minute] = timeSlot.value.split(":").map(Number);
+      const slotStart = new Date(date);
+      slotStart.setHours(hour, minute, 0, 0);
 
-      // Check if this hour overlaps with any event
+      const slotEnd = new Date(date);
+      slotEnd.setHours(hour, minute + timeInterval, 0, 0);
+
+      // Check if this slot overlaps with any event
       const hasEventOverlap = events.some((event) => {
         const eventStart = new Date(event.start_time || event.startTime);
         const eventEnd = new Date(event.end_time || event.endTime);
-        return doTimesOverlap(hourStart, hourEnd, eventStart, eventEnd);
+
+        // Apply buffer times
+        if (businessHours.bufferBefore) {
+          eventStart.setMinutes(
+            eventStart.getMinutes() - businessHours.bufferBefore
+          );
+        }
+        if (businessHours.bufferAfter) {
+          eventEnd.setMinutes(
+            eventEnd.getMinutes() + businessHours.bufferAfter
+          );
+        }
+
+        return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
       });
 
-      // Check if this hour is marked as available in availability slots
+      // Check if this slot is marked as available in availability slots
       const hasAvailabilitySlot = availabilitySlots.some((slot) => {
-        const slotStart = new Date(slot.start_time);
-        const slotEnd = new Date(slot.end_time);
+        const slotSlotStart = new Date(slot.start_time);
+        const slotSlotEnd = new Date(slot.end_time);
         return (
-          doTimesOverlap(hourStart, hourEnd, slotStart, slotEnd) &&
+          doTimesOverlap(slotStart, slotEnd, slotSlotStart, slotSlotEnd) &&
           slot.available
         );
       });
@@ -118,17 +149,17 @@ export const useAvailabilityData = (userId, currentMonth) => {
         (availabilitySlots.length === 0 || hasAvailabilitySlot);
 
       pattern.push(isAvailable);
-    }
+    });
 
     return pattern;
   };
 
-  // Generate time slots for a specific date
+  // Generate time slots for a specific date using business hours
   const generateTimeSlotsForDate = (date, events, availabilitySlots) => {
-    const day = date.getDay();
-
-    // No slots on weekends
-    if (day === 0 || day === 6) return { morning: [], afternoon: [] };
+    // Check if it's a working day
+    if (!isWorkingDay(date, businessHours.workingDays)) {
+      return { morning: [], afternoon: [] };
+    }
 
     // Filter events for this date
     const dayStart = new Date(date);
@@ -149,59 +180,70 @@ export const useAvailabilityData = (userId, currentMonth) => {
       return slotStart.toDateString() === date.toDateString();
     });
 
-    // Morning and afternoon slots
+    // Generate time slots based on business hours
+    const timeSlotOptions = generateTimeSlots(
+      businessHours.startTime,
+      businessHours.endTime,
+      timeInterval
+    );
+
     const morningSlots = [];
     const afternoonSlots = [];
 
-    // Generate slots from 8AM to 6PM
-    for (let hour = 8; hour < 18; hour++) {
-      for (let minutes of [0, 30]) {
-        const slotStart = new Date(date);
-        slotStart.setHours(hour, minutes, 0, 0);
+    timeSlotOptions.forEach((timeSlot) => {
+      const [hour, minute] = timeSlot.value.split(":").map(Number);
+      const slotStart = new Date(date);
+      slotStart.setHours(hour, minute, 0, 0);
 
-        const slotEnd = new Date(date);
-        slotEnd.setHours(hour, minutes + 30, 0, 0);
+      const slotEnd = new Date(date);
+      slotEnd.setHours(hour, minute + timeInterval, 0, 0);
 
-        // Check if this slot overlaps with any event
-        const hasEventOverlap = dayEvents.some((event) => {
-          const eventStart = new Date(event.start_time);
-          const eventEnd = new Date(event.end_time);
-          return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
-        });
+      // Check if this slot overlaps with any event
+      const hasEventOverlap = dayEvents.some((event) => {
+        const eventStart = new Date(event.start_time);
+        const eventEnd = new Date(event.end_time);
 
-        // Check if this slot is marked as available in availability slots
-        const matchingAvailabilitySlot = dayAvailabilitySlots.find((slot) => {
-          const availStart = new Date(slot.start_time);
-          const availEnd = new Date(slot.end_time);
-          return doTimesOverlap(slotStart, slotEnd, availStart, availEnd);
-        });
-
-        const isAvailable =
-          !hasEventOverlap &&
-          (dayAvailabilitySlots.length === 0 ||
-            (matchingAvailabilitySlot && matchingAvailabilitySlot.available));
-
-        // Format time for display
-        const ampm = hour >= 12 ? "pm" : "am";
-        const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-        const displayMinutes = minutes === 0 ? "00" : "30";
-        const time = `${displayHour}:${displayMinutes}${ampm}`;
-
-        const slot = {
-          time,
-          available: isAvailable,
-          start: slotStart,
-          end: slotEnd,
-        };
-
-        // Sort into morning and afternoon
-        if (hour < 12) {
-          morningSlots.push(slot);
-        } else {
-          afternoonSlots.push(slot);
+        // Apply buffer times
+        if (businessHours.bufferBefore) {
+          eventStart.setMinutes(
+            eventStart.getMinutes() - businessHours.bufferBefore
+          );
         }
+        if (businessHours.bufferAfter) {
+          eventEnd.setMinutes(
+            eventEnd.getMinutes() + businessHours.bufferAfter
+          );
+        }
+
+        return doTimesOverlap(slotStart, slotEnd, eventStart, eventEnd);
+      });
+
+      // Check if this slot is marked as available in availability slots
+      const matchingAvailabilitySlot = dayAvailabilitySlots.find((slot) => {
+        const availStart = new Date(slot.start_time);
+        const availEnd = new Date(slot.end_time);
+        return doTimesOverlap(slotStart, slotEnd, availStart, availEnd);
+      });
+
+      const isAvailable =
+        !hasEventOverlap &&
+        (dayAvailabilitySlots.length === 0 ||
+          (matchingAvailabilitySlot && matchingAvailabilitySlot.available));
+
+      const slot = {
+        time: timeSlot.label,
+        available: isAvailable,
+        start: slotStart,
+        end: slotEnd,
+      };
+
+      // Sort into morning and afternoon (before/after noon)
+      if (hour < 12) {
+        morningSlots.push(slot);
+      } else {
+        afternoonSlots.push(slot);
       }
-    }
+    });
 
     return { morning: morningSlots, afternoon: afternoonSlots };
   };
@@ -353,7 +395,7 @@ export const useAvailabilityData = (userId, currentMonth) => {
     };
 
     fetchAvailabilityData();
-  }, [userId, currentMonth, activeCalendar]);
+  }, [userId, currentMonth, businessHours, timeInterval, activeCalendar]);
 
   // Helper function to generate mock events if needed
   const generateMockEvents = (startDate, endDate) => {
@@ -362,33 +404,45 @@ export const useAvailabilityData = (userId, currentMonth) => {
     const currentDate = new Date(startDate);
 
     while (currentDate <= endDate) {
-      // Skip weekends
-      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-        // Create 2-3 events per day
+      // Only generate for working days
+      if (isWorkingDay(currentDate, businessHours.workingDays)) {
+        // Create 2-3 events per working day
         const numEvents = Math.floor(Math.random() * 2) + 2;
 
         for (let i = 0; i < numEvents; i++) {
-          const hour = 9 + Math.floor(Math.random() * 8); // 9am to 4pm
-          const duration = Math.floor(Math.random() * 3) + 1; // 1-3 hours
+          // Generate events within business hours
+          const timeSlotOptions = generateTimeSlots(
+            businessHours.startTime,
+            businessHours.endTime,
+            timeInterval
+          );
 
-          const start = new Date(currentDate);
-          start.setHours(hour, 0, 0, 0);
+          if (timeSlotOptions.length > 0) {
+            const randomSlot =
+              timeSlotOptions[
+                Math.floor(Math.random() * timeSlotOptions.length)
+              ];
+            const [hour, minute] = randomSlot.value.split(":").map(Number);
 
-          const end = new Date(start);
-          end.setHours(start.getHours() + duration, 0, 0, 0);
+            const start = new Date(currentDate);
+            start.setHours(hour, minute, 0, 0);
 
-          events.push({
-            id: `mock-${currentDate.toISOString()}-${i}`,
-            user_id: userId,
-            title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
-              Math.floor(Math.random() * 5)
-            ],
-            start_time: start.toISOString(),
-            end_time: end.toISOString(),
-            all_day: false,
-            calendar_id: "primary",
-            provider: "mock",
-          });
+            const end = new Date(start);
+            end.setMinutes(end.getMinutes() + timeInterval);
+
+            events.push({
+              id: `mock-${currentDate.toISOString()}-${i}`,
+              user_id: userId,
+              title: ["Meeting", "Appointment", "Call", "Conference", "Lunch"][
+                Math.floor(Math.random() * 5)
+              ],
+              start_time: start.toISOString(),
+              end_time: end.toISOString(),
+              all_day: false,
+              calendar_id: "primary",
+              provider: "mock",
+            });
+          }
         }
       }
 

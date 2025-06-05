@@ -18,7 +18,7 @@ const Login = () => {
     try {
       const { error } = await signIn(email, password);
       if (error) throw error;
-      navigate("/");
+      navigate("/app/calendar");
     } catch (error) {
       console.error("Login error:", error);
       setError(error.message || "Failed to sign in");

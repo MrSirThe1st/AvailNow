@@ -1,16 +1,46 @@
-/**
- * Widget Service - Provides methods for widget management and customization
- * This service handles widget settings, customization, and generating embed codes
- * with real data from Supabase instead of mocks
- */
-
+// src/lib/widgetService.jsx - Simplified Version
 import { supabase } from "./supabase";
 
-/**
- * Get widget settings for a user
- * @param {string} userId - Supabase user ID
- * @returns {Promise<Object>} - Widget settings
- */
+export const getDefaultWidgetSettings = () => {
+  return {
+    theme: "light",
+    accentColor: "#0070f3",
+    textColor: "#333333",
+    buttonText: "Check Availability",
+    showDays: 5,
+    compact: false,
+    headerStyle: "modern",
+    fontFamily: "system",
+    borderRadius: "medium",
+    providerName: "Your Company",
+    providerAddress: "123 Business St, City, State",
+    companyLogo: null,
+    secondaryColor: "#00a8ff",
+
+    // Simplified Business Hours
+    businessHours: {
+      startTime: "09:00",
+      endTime: "17:00",
+      workingDays: [1, 2, 3, 4, 5], // Monday to Friday
+    },
+
+    // Booking Settings
+    bookingType: "direct", // "direct", "contact", "custom"
+    contactInfo: {
+      phone: "",
+      email: "",
+      website: "",
+      message: "Call us to schedule your appointment",
+    },
+    customInstructions: {
+      title: "How to Book",
+      message: "Contact us to schedule your appointment",
+      buttonText: "Contact Us",
+      actionUrl: "",
+    },
+  };
+};
+
 export const getWidgetSettings = async (userId) => {
   try {
     if (!userId) {
@@ -28,6 +58,17 @@ export const getWidgetSettings = async (userId) => {
       console.warn("Error fetching widget settings:", widgetError);
     }
 
+    // Get calendar settings for business hours
+    const { data: calendarData, error: calendarError } = await supabase
+      .from("calendar_settings")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (calendarError) {
+      console.warn("Error fetching calendar settings:", calendarError);
+    }
+
     // Get user profile for company logo
     const { data: profileData, error: profileError } = await supabase
       .from("user_profiles")
@@ -39,11 +80,24 @@ export const getWidgetSettings = async (userId) => {
       console.warn("Error fetching user profile:", profileError);
     }
 
-    // Merge data with defaults
     const defaultSettings = getDefaultWidgetSettings();
+
+    // Build business hours from calendar settings or defaults
+    const businessHours = {
+      startTime:
+        calendarData?.availability_start_time ||
+        defaultSettings.businessHours.startTime,
+      endTime:
+        calendarData?.availability_end_time ||
+        defaultSettings.businessHours.endTime,
+      workingDays:
+        calendarData?.working_days || defaultSettings.businessHours.workingDays,
+    };
+
     const mergedSettings = {
       ...defaultSettings,
       ...widgetData,
+      businessHours,
       companyLogo: profileData?.company_logo || null,
       providerName:
         widgetData?.providerName ||
@@ -58,34 +112,184 @@ export const getWidgetSettings = async (userId) => {
   }
 };
 
-/**
- * Get default widget settings
- * @returns {Object} - Default widget settings
- */
-export const getDefaultWidgetSettings = () => {
-  return {
-    theme: "light",
-    accentColor: "#0070f3",
-    textColor: "#333333",
-    buttonText: "Check Availability",
-    showDays: 5,
-    compact: false,
-    headerStyle: "modern",
-    fontFamily: "system",
-    borderRadius: "medium",
-    providerName: "Your Company",
-    providerAddress: "123 Business St, City, State",
-    companyLogo: null,
-    secondaryColor: "#00a8ff",
-  };
+export const saveWidgetSettings = async (userId, settings) => {
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
+  try {
+    const { companyLogo, businessHours, ...widgetSettings } = settings;
+
+    // Update widget settings
+    const { data: existingSettings, error: checkError } = await supabase
+      .from("widget_settings")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (checkError && checkError.code !== "PGRST116") {
+      throw checkError;
+    }
+
+    const now = new Date().toISOString();
+
+    const dbWidgetSettings = {
+      user_id: userId,
+      theme: widgetSettings.theme,
+      accentColor: widgetSettings.accentColor,
+      secondaryColor: widgetSettings.secondaryColor,
+      textColor: widgetSettings.textColor,
+      buttonText: widgetSettings.buttonText,
+      showDays: widgetSettings.showDays,
+      compact: widgetSettings.compact,
+      headerStyle: widgetSettings.headerStyle,
+      fontFamily: widgetSettings.fontFamily,
+      borderRadius: widgetSettings.borderRadius,
+      providerName: widgetSettings.providerName,
+      providerAddress: widgetSettings.providerAddress,
+      bookingType: widgetSettings.bookingType,
+      contactInfo: JSON.stringify(widgetSettings.contactInfo),
+      customInstructions: JSON.stringify(widgetSettings.customInstructions),
+      updated_at: now,
+    };
+
+    let widgetResult;
+
+    if (existingSettings) {
+      const { data, error } = await supabase
+        .from("widget_settings")
+        .update(dbWidgetSettings)
+        .eq("id", existingSettings.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      widgetResult = data;
+    } else {
+      dbWidgetSettings.created_at = now;
+
+      const { data, error } = await supabase
+        .from("widget_settings")
+        .insert(dbWidgetSettings)
+        .select()
+        .single();
+
+      if (error) throw error;
+      widgetResult = data;
+    }
+
+    // Update calendar settings for business hours
+    const calendarSettingsData = {
+      user_id: userId,
+      availability_start_time: businessHours.startTime,
+      availability_end_time: businessHours.endTime,
+      working_days: businessHours.workingDays,
+      updated_at: now,
+    };
+
+    const { data: existingCalendarSettings, error: calendarCheckError } =
+      await supabase
+        .from("calendar_settings")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (calendarCheckError && calendarCheckError.code !== "PGRST116") {
+      throw calendarCheckError;
+    }
+
+    if (existingCalendarSettings) {
+      const { error: calendarUpdateError } = await supabase
+        .from("calendar_settings")
+        .update(calendarSettingsData)
+        .eq("id", existingCalendarSettings.id);
+
+      if (calendarUpdateError) throw calendarUpdateError;
+    } else {
+      calendarSettingsData.created_at = now;
+
+      const { error: calendarInsertError } = await supabase
+        .from("calendar_settings")
+        .insert(calendarSettingsData);
+
+      if (calendarInsertError) throw calendarInsertError;
+    }
+
+    // Handle company logo in user_profiles if provided
+    if (companyLogo !== undefined) {
+      const { error: profileError } = await supabase
+        .from("user_profiles")
+        .upsert({
+          user_id: userId,
+          avatar_url: companyLogo,
+          updated_at: now,
+        });
+
+      if (profileError) {
+        console.warn("Failed to update company logo:", profileError);
+      }
+    }
+
+    return {
+      ...widgetResult,
+      businessHours,
+      companyLogo:
+        companyLogo !== undefined ? companyLogo : settings.companyLogo,
+    };
+  } catch (error) {
+    console.error("Error saving widget settings:", error);
+    throw error;
+  }
 };
 
-/**
- * Generate a universal widget embed code for a user that works on all devices
- * @param {string} userId - Supabase or Clerk user ID
- * @param {Object} settings - Widget settings
- * @returns {string} - HTML embed code
- */
+// Generate time slots with 30-minute intervals (simplified)
+export const generateTimeSlots = (startTime, endTime) => {
+  const slots = [];
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+
+  for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+
+    const timeString = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayTime = `${displayHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
+
+    slots.push({
+      value: timeString,
+      label: displayTime,
+      minutes: minutes,
+    });
+  }
+
+  return slots;
+};
+
+export const isWithinBusinessHours = (timeString, businessHours) => {
+  const [hour, minute] = timeString.split(":").map(Number);
+  const timeMinutes = hour * 60 + minute;
+
+  const [startHour, startMinute] = businessHours.startTime
+    .split(":")
+    .map(Number);
+  const [endHour, endMinute] = businessHours.endTime.split(":").map(Number);
+
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+
+  return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+};
+
+export const isWorkingDay = (date, workingDays) => {
+  const dayOfWeek = date.getDay();
+  return workingDays.includes(dayOfWeek);
+};
+
 export const generateWidgetEmbedCode = (userId, settings) => {
   if (!userId) {
     throw new Error("User ID is required");
@@ -107,37 +311,113 @@ export const generateWidgetEmbedCode = (userId, settings) => {
     responsive: true,
     providerName: "${settingsToUse.providerName || ""}",
     providerAddress: "${settingsToUse.providerAddress || ""}",
-    companyLogo: "${settingsToUse.companyLogo || ""}"
+    companyLogo: "${settingsToUse.companyLogo || ""}",
+    businessHours: ${JSON.stringify(settingsToUse.businessHours)},
+    bookingType: "${settingsToUse.bookingType}",
+    contactInfo: ${JSON.stringify(settingsToUse.contactInfo)},
+    customInstructions: ${JSON.stringify(settingsToUse.customInstructions)}
   });
 </script>
 <!-- End AvailNow Widget -->`;
 };
 
-/**
- * For backward compatibility - returns the same code as generateWidgetEmbedCode
- * @param {string} userId - Supabase or Clerk user ID
- * @param {Object} settings - Widget settings
- * @returns {string} - HTML embed code for mobile
- */
-export const generateMobileWidgetEmbedCode = (userId, settings) => {
-  return generateWidgetEmbedCode(userId, settings);
+// Rest of the utility functions remain the same...
+export const getAvailabilityForDateRange = async (
+  userId,
+  startDate,
+  endDate
+) => {
+  if (!userId) {
+    return [];
+  }
+
+  try {
+    const settings = await getWidgetSettings(userId);
+    const { businessHours } = settings;
+
+    const { data, error } = await supabase
+      .from("availability_slots")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("start_time", startDate.toISOString())
+      .lte("end_time", endDate.toISOString())
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    // Filter slots to only include those within business hours and working days
+    const filteredSlots = (data || []).filter((slot) => {
+      const slotDate = new Date(slot.start_time);
+      const slotTime = slotDate.toTimeString().substring(0, 5);
+
+      return (
+        isWorkingDay(slotDate, businessHours.workingDays) &&
+        isWithinBusinessHours(slotTime, businessHours)
+      );
+    });
+
+    return filteredSlots;
+  } catch (error) {
+    console.error("Error fetching availability:", error);
+    return [];
+  }
 };
 
-/**
- * For backward compatibility - returns the same code as generateWidgetEmbedCode
- * @param {string} userId - Supabase or Clerk user ID
- * @param {Object} settings - Widget settings
- * @returns {string} - HTML embed code for responsive widget
- */
-export const generateResponsiveWidgetEmbedCode = (userId, settings) => {
-  return generateWidgetEmbedCode(userId, settings);
+export const trackWidgetEvent = async (userId, eventType) => {
+  if (!userId || !eventType) {
+    return;
+  }
+
+  try {
+    const { data: stats, error: statsError } = await supabase
+      .from("widget_stats")
+      .select("id, views, clicks, bookings")
+      .eq("user_id", userId)
+      .single();
+
+    if (statsError && statsError.code !== "PGRST116") {
+      throw statsError;
+    }
+
+    const now = new Date().toISOString();
+
+    if (stats) {
+      const updates = {
+        last_updated: now,
+      };
+
+      if (eventType === "view") updates.views = (stats.views || 0) + 1;
+      if (eventType === "click") updates.clicks = (stats.clicks || 0) + 1;
+      if (eventType === "booking") updates.bookings = (stats.bookings || 0) + 1;
+
+      const { error: updateError } = await supabase
+        .from("widget_stats")
+        .update(updates)
+        .eq("id", stats.id);
+
+      if (updateError) throw updateError;
+    } else {
+      const newStats = {
+        user_id: userId,
+        views: eventType === "view" ? 1 : 0,
+        clicks: eventType === "click" ? 1 : 0,
+        bookings: eventType === "booking" ? 1 : 0,
+        last_updated: now,
+      };
+
+      const { error: insertError } = await supabase
+        .from("widget_stats")
+        .insert(newStats);
+
+      if (insertError) throw insertError;
+    }
+  } catch (error) {
+    console.error("Error tracking widget event:", error);
+  }
 };
 
-/**
- * Get widget statistics for a user
- * @param {string} userId - Supabase user ID
- * @returns {Promise<Object>} - Widget usage statistics
- */
 export const getWidgetStatistics = async (userId) => {
   if (!userId) {
     return {
@@ -178,170 +458,6 @@ export const getWidgetStatistics = async (userId) => {
   }
 };
 
-/**
- * Track a widget event (view, click, booking)
- * @param {string} userId - Supabase user ID
- * @param {string} eventType - Type of event ('view', 'click', 'booking')
- * @returns {Promise<void>}
- */
-export const trackWidgetEvent = async (userId, eventType) => {
-  if (!userId || !eventType) {
-    return; // Silently fail if required parameters are missing
-  }
-
-  try {
-    // First get current stats
-    const { data: stats, error: statsError } = await supabase
-      .from("widget_stats")
-      .select("id, views, clicks, bookings")
-      .eq("user_id", userId)
-      .single();
-
-    if (statsError && statsError.code !== "PGRST116") {
-      throw statsError;
-    }
-
-    const now = new Date().toISOString();
-
-    if (stats) {
-      // Update existing stats
-      const updates = {
-        last_updated: now,
-      };
-
-      if (eventType === "view") updates.views = (stats.views || 0) + 1;
-      if (eventType === "click") updates.clicks = (stats.clicks || 0) + 1;
-      if (eventType === "booking") updates.bookings = (stats.bookings || 0) + 1;
-
-      const { error: updateError } = await supabase
-        .from("widget_stats")
-        .update(updates)
-        .eq("id", stats.id);
-
-      if (updateError) throw updateError;
-    } else {
-      // Create new stats record
-      const newStats = {
-        user_id: userId,
-        views: eventType === "view" ? 1 : 0,
-        clicks: eventType === "click" ? 1 : 0,
-        bookings: eventType === "booking" ? 1 : 0,
-        last_updated: now,
-      };
-
-      const { error: insertError } = await supabase
-        .from("widget_stats")
-        .insert(newStats);
-
-      if (insertError) throw insertError;
-    }
-  } catch (error) {
-    console.error("Error tracking widget event:", error);
-    // Don't throw - widget tracking should fail silently
-  }
-};
-
-/**
- * Save widget settings for a user
- * @param {string} userId - Supabase user ID
- * @param {Object} settings - Widget settings to save
- * @returns {Promise<Object>} - Updated widget settings
- */
-export const saveWidgetSettings = async (userId, settings) => {
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
-
-  try {
-    const { companyLogo, ...widgetSettings } = settings;
-
-    const { data: existingSettings, error: checkError } = await supabase
-      .from("widget_settings")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (checkError && checkError.code !== "PGRST116") {
-      throw checkError;
-    }
-
-    const now = new Date().toISOString();
-
-    const dbWidgetSettings = {
-      user_id: userId,
-      theme: widgetSettings.theme,
-      accentColor: widgetSettings.accentColor,
-      secondaryColor: widgetSettings.secondaryColor,
-      textColor: widgetSettings.textColor,
-      buttonText: widgetSettings.buttonText,
-      showDays: widgetSettings.showDays,
-      compact: widgetSettings.compact,
-      headerStyle: widgetSettings.headerStyle,
-      fontFamily: widgetSettings.fontFamily,
-      borderRadius: widgetSettings.borderRadius,
-      providerName: widgetSettings.providerName,
-      providerAddress: widgetSettings.providerAddress,
-      updated_at: now,
-    };
-
-    let result;
-
-    if (existingSettings) {
-      // Update existing settings
-      const { data, error } = await supabase
-        .from("widget_settings")
-        .update(dbWidgetSettings)
-        .eq("id", existingSettings.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    } else {
-      // Insert new settings
-      dbWidgetSettings.created_at = now;
-
-      const { data, error } = await supabase
-        .from("widget_settings")
-        .insert(dbWidgetSettings)
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    }
-
-    // Handle company logo in user_profiles if provided
-    if (companyLogo !== undefined) {
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .upsert({
-          user_id: userId,
-          avatar_url: companyLogo,
-          updated_at: now,
-        });
-
-      if (profileError) {
-        console.warn("Failed to update company logo:", profileError);
-      }
-    }
-
-    return {
-      ...result,
-      companyLogo:
-        companyLogo !== undefined ? companyLogo : settings.companyLogo,
-    };
-  } catch (error) {
-    console.error("Error saving widget settings:", error);
-    throw error;
-  }
-};
-
-/**
- * Get user profile data, including display name and company logo
- * @param {string} userId - Supabase user ID
- * @returns {Promise<Object>} - User profile data
- */
 export const getUserProfileForWidget = async (userId) => {
   if (!userId) {
     return null;
@@ -366,48 +482,6 @@ export const getUserProfileForWidget = async (userId) => {
   }
 };
 
-/**
- * Get availability for a specific date range
- * @param {string} userId - Supabase user ID
- * @param {Date} startDate - Start date
- * @param {Date} endDate - End date
- * @returns {Promise<Array>} - Availability slots
- */
-export const getAvailabilityForDateRange = async (
-  userId,
-  startDate,
-  endDate
-) => {
-  if (!userId) {
-    return [];
-  }
-
-  try {
-    // Fetch availability slots from Supabase
-    const { data, error } = await supabase
-      .from("availability_slots")
-      .select("*")
-      .eq("user_id", userId)
-      .gte("start_time", startDate.toISOString())
-      .lte("end_time", endDate.toISOString())
-      .order("start_time", { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error("Error fetching availability:", error);
-    return [];
-  }
-};
-
-/**
- * Get calendar integration status for user
- * @param {string} userId - Supabase user ID
- * @returns {Promise<Array>} Array of connected calendar integrations
- */
 export const getCalendarIntegrations = async (userId) => {
   if (!userId) {
     return [];
@@ -430,11 +504,6 @@ export const getCalendarIntegrations = async (userId) => {
   }
 };
 
-/**
- * Get real data for widget
- * @param {string} userId - Supabase user ID
- * @returns {Promise<Object>} - Widget data
- */
 export const getWidgetData = async (userId) => {
   if (!userId) {
     return {
@@ -451,7 +520,6 @@ export const getWidgetData = async (userId) => {
   }
 
   try {
-    // Get all data in parallel to optimize performance
     const [settings, profile, stats, integrations] = await Promise.all([
       getWidgetSettings(userId),
       getUserProfileForWidget(userId),
@@ -459,7 +527,6 @@ export const getWidgetData = async (userId) => {
       getCalendarIntegrations(userId),
     ]);
 
-    // Get availability for next 30 days
     const startDate = new Date();
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 30);
@@ -470,7 +537,6 @@ export const getWidgetData = async (userId) => {
       endDate
     );
 
-    // Track this widget view
     await trackWidgetEvent(userId, "view");
 
     return {

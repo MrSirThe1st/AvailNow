@@ -1,4 +1,4 @@
-// src/pages/Widget.jsx
+// src/pages/Widget.jsx - Simplified Version
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/SupabaseAuthContext";
 import {
@@ -29,6 +29,28 @@ const Widget = () => {
     providerName: "Dr. Sarah Johnson",
     providerAddress: "123 Healthcare Blvd, Suite 300",
     companyLogo: null,
+
+    // Simplified Business Hours
+    businessHours: {
+      startTime: "09:00",
+      endTime: "17:00",
+      workingDays: [1, 2, 3, 4, 5], // Monday to Friday
+    },
+
+    // Booking Settings
+    bookingType: "direct", // "direct", "contact", "custom"
+    contactInfo: {
+      phone: "",
+      email: "",
+      website: "",
+      message: "Call us to schedule your appointment",
+    },
+    customInstructions: {
+      title: "How to Book",
+      message: "Contact us to schedule your appointment",
+      buttonText: "Contact Us",
+      actionUrl: "",
+    },
   });
   const [embedCode, setEmbedCode] = useState("");
 
@@ -40,12 +62,34 @@ const Widget = () => {
       try {
         setInitialLoading(true);
         const settings = await getWidgetSettings(user.id);
+
+        // Parse JSON fields if they exist as strings
+        let parsedSettings = { ...settings };
+
+        if (typeof settings.contactInfo === "string") {
+          try {
+            parsedSettings.contactInfo = JSON.parse(settings.contactInfo);
+          } catch (e) {
+            console.warn("Failed to parse contactInfo:", e);
+          }
+        }
+
+        if (typeof settings.customInstructions === "string") {
+          try {
+            parsedSettings.customInstructions = JSON.parse(
+              settings.customInstructions
+            );
+          } catch (e) {
+            console.warn("Failed to parse customInstructions:", e);
+          }
+        }
+
         setWidgetSettings({
-          ...settings,
-          providerName: settings.providerName || "Dr. Sarah Johnson",
+          ...parsedSettings,
+          providerName: parsedSettings.providerName || "Dr. Sarah Johnson",
           providerAddress:
-            settings.providerAddress || "123 Healthcare Blvd, Suite 300",
-          companyLogo: settings.companyLogo || null,
+            parsedSettings.providerAddress || "123 Healthcare Blvd, Suite 300",
+          companyLogo: parsedSettings.companyLogo || null,
         });
       } catch (err) {
         console.error("Error loading widget settings:", err);
@@ -127,7 +171,7 @@ const Widget = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Settings Panel */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Appearance Settings</h3>
+            <h3 className="text-lg font-semibold mb-4">Settings</h3>
             <WidgetSettingsPanel
               settings={widgetSettings}
               onSettingChange={handleSettingChange}
@@ -153,8 +197,47 @@ const Widget = () => {
                 <li>
                   3. The widget automatically adapts to desktop and mobile
                 </li>
-                <li>4. Visitors can book appointments directly</li>
+                <li>4. Visitors can see availability and book appointments</li>
               </ol>
+            </div>
+
+            {/* Business Hours Summary */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">
+                Current Settings
+              </h4>
+              <div className="text-sm text-blue-700">
+                <p>
+                  <strong>Hours:</strong>{" "}
+                  {widgetSettings.businessHours.startTime} -{" "}
+                  {widgetSettings.businessHours.endTime}
+                </p>
+                <p>
+                  <strong>Working Days:</strong>{" "}
+                  {widgetSettings.businessHours.workingDays
+                    .map((day) => {
+                      const days = [
+                        "Sun",
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat",
+                      ];
+                      return days[day];
+                    })
+                    .join(", ")}
+                </p>
+                <p>
+                  <strong>Booking Type:</strong>{" "}
+                  {widgetSettings.bookingType === "direct"
+                    ? "Direct Booking"
+                    : widgetSettings.bookingType === "contact"
+                      ? "Contact to Book"
+                      : "Custom Instructions"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
