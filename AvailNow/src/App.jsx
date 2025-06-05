@@ -44,7 +44,24 @@ function App() {
       path: "/auth/callback",
       element: <OAuthCallback />,
     },
-    // Protected routes - different base path
+    // Direct calendar route for backward compatibility
+    {
+      path: "/calendar",
+      element: <ProtectedRoute />,
+      children: [
+        {
+          path: "",
+          element: <Layout />,
+          children: [
+            {
+              index: true,
+              element: <Calendar />,
+            },
+          ],
+        },
+      ],
+    },
+    // Protected routes under /app
     {
       path: "/app",
       element: <ProtectedRoute />,
@@ -54,7 +71,7 @@ function App() {
           element: <Layout />,
           children: [
             {
-              index: true, // This makes /app redirect to /app/calendar
+              index: true,
               element: <Calendar />,
             },
             {
