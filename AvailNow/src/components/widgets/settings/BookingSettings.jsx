@@ -1,6 +1,6 @@
 // src/components/widgets/settings/BookingSettings.jsx
 import React from "react";
-import { Phone, MessageSquare, ExternalLink } from "lucide-react";
+import { Phone, MessageSquare } from "lucide-react";
 
 const BookingSettings = ({
   bookingType,
@@ -11,12 +11,6 @@ const BookingSettings = ({
   onCustomInstructionsChange,
 }) => {
   const bookingOptions = [
-    {
-      id: "direct",
-      name: "Direct Booking",
-      description: "Allow clients to select and book time slots directly",
-      icon: <ExternalLink size={20} />,
-    },
     {
       id: "contact",
       name: "Contact to Book",
@@ -241,8 +235,6 @@ const BookingSettings = ({
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h4 className="text-sm font-medium text-blue-900 mb-2">Preview</h4>
         <p className="text-sm text-blue-700">
-          {bookingType === "direct" &&
-            "Clients will be able to select and book available time slots directly."}
           {bookingType === "contact" &&
             "Clients will see your contact information and a 'Contact Us' button."}
           {bookingType === "custom" &&

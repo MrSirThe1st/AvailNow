@@ -26,6 +26,9 @@ const MobileEmbedWidget = ({
     availabilityData,
     selectedDate,
     timeSlots,
+    bookingType,
+    contactInfo,
+    customInstructions,
     handleDateSelect,
     handleBookSlot,
   } = useMobileAvailability(userId, showDays);
@@ -122,6 +125,9 @@ const MobileEmbedWidget = ({
           onBookSlot={handleBookSlot}
           theme={theme}
           accentColor={accentColor}
+          bookingType={bookingType}
+          contactInfo={contactInfo}
+          customInstructions={customInstructions}
         />
 
         <MobileWidgetFooter theme={theme} accentColor={accentColor} />

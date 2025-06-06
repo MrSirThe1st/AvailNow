@@ -1,4 +1,4 @@
-// src/lib/widgetService.jsx - Simplified Version
+// src/lib/widgetService.jsx - Updated
 import { supabase } from "./supabase";
 
 export const getDefaultWidgetSettings = () => {
@@ -17,20 +17,20 @@ export const getDefaultWidgetSettings = () => {
     companyLogo: null,
     secondaryColor: "#00a8ff",
 
-    // Simplified Business Hours
+    // Business Hours
     businessHours: {
       startTime: "09:00",
       endTime: "17:00",
       workingDays: [1, 2, 3, 4, 5], // Monday to Friday
     },
 
-    // Booking Settings
-    bookingType: "direct", // "direct", "contact", "custom"
+    // Booking Settings - Default to contact
+    bookingType: "contact",
     contactInfo: {
-      phone: "",
-      email: "",
-      website: "",
-      message: "Call us to schedule your appointment",
+      phone: "+1 (555) 123-4567",
+      email: "appointments@yourcompany.com",
+      website: "https://yourcompany.com/book",
+      message: "Call us to schedule your appointment or visit our website",
     },
     customInstructions: {
       title: "How to Book",
@@ -69,7 +69,6 @@ export const getWidgetSettings = async (userId) => {
       console.warn("Error fetching calendar settings:", calendarError);
     }
 
-
     const defaultSettings = getDefaultWidgetSettings();
 
     // Build business hours from calendar settings or defaults
@@ -84,12 +83,45 @@ export const getWidgetSettings = async (userId) => {
         calendarData?.working_days || defaultSettings.businessHours.workingDays,
     };
 
+    // Parse JSON strings for contact info and custom instructions
+    let contactInfo = defaultSettings.contactInfo;
+    let customInstructions = defaultSettings.customInstructions;
+
+    if (widgetData?.contactInfo) {
+      try {
+        contactInfo =
+          typeof widgetData.contactInfo === "string"
+            ? JSON.parse(widgetData.contactInfo)
+            : widgetData.contactInfo;
+      } catch (e) {
+        console.warn("Failed to parse contactInfo:", e);
+      }
+    }
+
+    if (widgetData?.customInstructions) {
+      try {
+        customInstructions =
+          typeof widgetData.customInstructions === "string"
+            ? JSON.parse(widgetData.customInstructions)
+            : widgetData.customInstructions;
+      } catch (e) {
+        console.warn("Failed to parse customInstructions:", e);
+      }
+    }
+
     const mergedSettings = {
       ...defaultSettings,
       ...widgetData,
       businessHours,
+      contactInfo,
+      customInstructions,
       companyLogo: widgetData?.company_logo || null,
       providerName: widgetData?.providerName || defaultSettings.providerName,
+      // Ensure bookingType is never 'direct'
+      bookingType:
+        widgetData?.bookingType === "direct"
+          ? "contact"
+          : widgetData?.bookingType || "contact",
     };
 
     return mergedSettings;
@@ -106,6 +138,11 @@ export const saveWidgetSettings = async (userId, settings) => {
 
   try {
     const { companyLogo, businessHours, ...widgetSettings } = settings;
+
+    // Ensure bookingType is never 'direct'
+    if (widgetSettings.bookingType === "direct") {
+      widgetSettings.bookingType = "contact";
+    }
 
     // Update widget settings
     const { data: existingSettings, error: checkError } = await supabase
@@ -216,7 +253,7 @@ export const saveWidgetSettings = async (userId, settings) => {
 };
 
 // Generate time slots with 30-minute intervals (simplified)
-export const generateTimeSlots = (startTime, endTime) => {
+export const generateTimeSlots = (startTime, endTime, interval = 30) => {
   const slots = [];
   const [startHour, startMinute] = startTime.split(":").map(Number);
   const [endHour, endMinute] = endTime.split(":").map(Number);
@@ -224,7 +261,7 @@ export const generateTimeSlots = (startTime, endTime) => {
   const startMinutes = startHour * 60 + startMinute;
   const endMinutes = endHour * 60 + endMinute;
 
-  for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+  for (let minutes = startMinutes; minutes < endMinutes; minutes += interval) {
     const hour = Math.floor(minutes / 60);
     const minute = minutes % 60;
 
@@ -270,6 +307,12 @@ export const generateWidgetEmbedCode = (userId, settings) => {
 
   const settingsToUse = settings || getDefaultWidgetSettings();
 
+  // Ensure bookingType is never 'direct' in embed code
+  const safeBookingType =
+    settingsToUse.bookingType === "direct"
+      ? "contact"
+      : settingsToUse.bookingType;
+
   return `<!-- AvailNow Widget -->
 <script src="https://widget.availnow.com/embed.js"></script>
 <script>
@@ -286,7 +329,7 @@ export const generateWidgetEmbedCode = (userId, settings) => {
     providerAddress: "${settingsToUse.providerAddress || ""}",
     companyLogo: "${settingsToUse.companyLogo || ""}",
     businessHours: ${JSON.stringify(settingsToUse.businessHours)},
-    bookingType: "${settingsToUse.bookingType}",
+    bookingType: "${safeBookingType}",
     contactInfo: ${JSON.stringify(settingsToUse.contactInfo)},
     customInstructions: ${JSON.stringify(settingsToUse.customInstructions)}
   });

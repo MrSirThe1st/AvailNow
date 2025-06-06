@@ -6,9 +6,9 @@ import { formatDate } from "../../lib/calendarUtils";
 import { useAvailabilityData } from "../../hooks/useAvailabilityData";
 import WidgetHeader from "./calendar/WidgetHeader";
 import CalendarSection from "./calendar/CalendarSection";
-import TimeSlotsSection from "./calendar/TimeSlotsSection";
 import BookingActionSection from "./calendar/BookingActionSection";
 import WidgetFooter from "./calendar/WidgetFooter";
+import TimeSlotsSection from "./calendar/TimeSlotsSection";
 
 /**
  * Embeddable widget component with business hours and booking settings
@@ -33,12 +33,12 @@ const EmbedWidget = ({
     bufferAfter: 0,
   },
   timeInterval = 30,
-  bookingType = "direct",
+  bookingType = "contact",
   contactInfo = {
-    phone: "",
-    email: "",
-    website: "",
-    message: "Call us to schedule your appointment",
+    phone: "+1 (555) 123-4567",
+    email: "appointments@yourcompany.com",
+    website: "https://yourcompany.com/book",
+    message: "Call us to schedule your appointment or visit our website",
   },
   customInstructions = {
     title: "How to Book",
@@ -65,24 +65,6 @@ const EmbedWidget = ({
   // Get styles
   const styles = createStyles(theme, accentColor, textColor, compact);
 
-  // Handle booking click for individual time slot
-  const handleBookingClick = (slot) => {
-    if (bookingType === "direct") {
-      // Track booking click
-      if (userId) {
-        trackWidgetEvent(userId, "booking");
-      }
-
-      // Direct booking - could open a modal or redirect
-      alert(
-        `Booking for ${formatDateForDisplay(new Date(selectedDate))} at ${slot.time}`
-      );
-    } else {
-      // For contact and custom booking types, handle in the action section
-      handleWidgetClick();
-    }
-  };
-
   // Handle main widget click (main booking button)
   const handleWidgetClick = () => {
     // Track widget click
@@ -90,11 +72,7 @@ const EmbedWidget = ({
       trackWidgetEvent(userId, "click");
     }
 
-    if (bookingType === "direct") {
-      alert(
-        `Booking appointment on ${formatDateForDisplay(new Date(selectedDate))}`
-      );
-    } else if (bookingType === "contact") {
+    if (bookingType === "contact") {
       // Handle contact booking
       if (contactInfo.website) {
         window.open(contactInfo.website, "_blank");
@@ -131,12 +109,6 @@ const EmbedWidget = ({
     const newDate = new Date(currentMonth);
     newDate.setMonth(currentMonth.getMonth() + 1);
     setCurrentMonth(newDate);
-  };
-
-  // Format date in a readable way
-  const formatDateForDisplay = (date) => {
-    const options = { weekday: "long", month: "long", day: "numeric" };
-    return date.toLocaleDateString("en-US", options);
   };
 
   // Show loading state
@@ -211,26 +183,16 @@ const EmbedWidget = ({
           onNextMonth={handleNextMonth}
         />
 
-        {/* Time slots section or booking action section */}
-        {bookingType === "direct" ? (
-          <TimeSlotsSection
-            selectedDate={selectedDate}
-            timeSlots={timeSlots}
-            styles={styles}
-            onBookingClick={handleBookingClick}
-            onWidgetClick={handleWidgetClick}
-          />
-        ) : (
-          <BookingActionSection
-            selectedDate={selectedDate}
-            timeSlots={timeSlots}
-            bookingType={bookingType}
-            contactInfo={contactInfo}
-            customInstructions={customInstructions}
-            styles={styles}
-            onWidgetClick={handleWidgetClick}
-          />
-        )}
+        {/* Time slots section with modal */}
+        <TimeSlotsSection
+          selectedDate={selectedDate}
+          timeSlots={timeSlots}
+          bookingType={bookingType}
+          contactInfo={contactInfo}
+          customInstructions={customInstructions}
+          styles={styles}
+          onWidgetClick={handleWidgetClick}
+        />
       </div>
 
       {/* Footer */}

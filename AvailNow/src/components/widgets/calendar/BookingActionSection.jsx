@@ -18,9 +18,11 @@ const BookingActionSection = ({
   };
 
   // Count available slots
-  const availableSlots =
-    timeSlots.morning?.filter((slot) => slot.available).length +
-      timeSlots.afternoon?.filter((slot) => slot.available).length || 0;
+  const morningAvailable =
+    timeSlots.morning?.filter((slot) => slot.available).length || 0;
+  const afternoonAvailable =
+    timeSlots.afternoon?.filter((slot) => slot.available).length || 0;
+  const totalAvailable = morningAvailable + afternoonAvailable;
 
   if (!selectedDate) {
     return (
@@ -41,24 +43,24 @@ const BookingActionSection = ({
       {/* Availability Summary */}
       <div
         style={{
-          backgroundColor: availableSlots > 0 ? "#dcfce7" : "#fef2f2",
+          backgroundColor: totalAvailable > 0 ? "#dcfce7" : "#fef2f2",
           borderRadius: "8px",
           padding: "12px",
           marginBottom: "16px",
-          border: `1px solid ${availableSlots > 0 ? "#bbf7d0" : "#fecaca"}`,
+          border: `1px solid ${totalAvailable > 0 ? "#bbf7d0" : "#fecaca"}`,
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            color: availableSlots > 0 ? "#166534" : "#dc2626",
+            color: totalAvailable > 0 ? "#166534" : "#dc2626",
           }}
         >
           <Clock size={16} style={{ marginRight: "8px" }} />
           <span style={{ fontWeight: "500", fontSize: "14px" }}>
-            {availableSlots > 0
-              ? `${availableSlots} available slots`
+            {totalAvailable > 0
+              ? `${totalAvailable} available slots`
               : "No available slots"}
           </span>
         </div>
@@ -199,19 +201,10 @@ const BookingActionSection = ({
 
       {/* Action Button */}
       <div style={styles.bookButtonContainer}>
-        <button
-          style={{
-            ...styles.bookButton,
-            opacity: availableSlots > 0 ? 1 : 0.6,
-            cursor: availableSlots > 0 ? "pointer" : "not-allowed",
-          }}
-          onClick={onWidgetClick}
-          disabled={availableSlots === 0}
-        >
+        <button style={styles.bookButton} onClick={onWidgetClick}>
           {bookingType === "contact" && "CONTACT US"}
           {bookingType === "custom" &&
             (customInstructions.buttonText || "LEARN MORE")}
-          {bookingType === "direct" && "BOOK NOW"}
         </button>
       </div>
 
@@ -224,9 +217,9 @@ const BookingActionSection = ({
           color: "#6b7280",
         }}
       >
-        {availableSlots === 0
-          ? "No slots available for this date"
-          : `${availableSlots} slots available for booking`}
+        {totalAvailable === 0
+          ? "Please contact us to check for other available times"
+          : `${totalAvailable} slots available - contact us to book`}
       </div>
     </div>
   );

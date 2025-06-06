@@ -1,5 +1,6 @@
 // src/components/widgets/mobile/MobileTimeSlots.jsx
-import React from "react";
+import React, { useState } from "react";
+import BookingModal from "../calendar/BookingModal";
 
 const MobileTimeSlots = ({
   selectedDate,
@@ -7,7 +8,13 @@ const MobileTimeSlots = ({
   onBookSlot,
   theme,
   accentColor,
+  bookingType,
+  contactInfo,
+  customInstructions,
 }) => {
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(null);
+
   const styles = {
     timeSlots: {
       padding: "16px",
@@ -69,6 +76,18 @@ const MobileTimeSlots = ({
     },
   };
 
+  const handleTimeSlotClick = (slot) => {
+    if (slot.available) {
+      setSelectedTime(slot.time);
+      setShowModal(true);
+    }
+  };
+
+  const handleBookingClick = () => {
+    setSelectedTime(null);
+    setShowModal(true);
+  };
+
   if (!selectedDate) {
     return (
       <div style={styles.noAvailability}>
@@ -90,7 +109,7 @@ const MobileTimeSlots = ({
               <div
                 key={index}
                 style={styles.timeSlot(slot.available)}
-                onClick={() => slot.available && onBookSlot(slot)}
+                onClick={() => handleTimeSlotClick(slot)}
               >
                 <span style={styles.timeText}>{slot.time}</span>
                 <span style={styles.availabilityStatus(slot.available)}>
@@ -100,13 +119,29 @@ const MobileTimeSlots = ({
             ))}
           </div>
 
-          <button style={styles.bookButton}>Book Appointment</button>
+          <button style={styles.bookButton} onClick={handleBookingClick}>
+            {bookingType === "contact"
+              ? "Contact Us"
+              : customInstructions?.buttonText || "Book Appointment"}
+          </button>
         </>
       ) : (
         <div style={styles.noAvailability}>
           No available time slots for this day
         </div>
       )}
+
+      {/* Modal */}
+      <BookingModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        bookingType={bookingType}
+        contactInfo={contactInfo}
+        customInstructions={customInstructions}
+        selectedDate={selectedDate}
+        selectedTime={selectedTime}
+        styles={{ bookButton: { backgroundColor: accentColor } }}
+      />
     </div>
   );
 };

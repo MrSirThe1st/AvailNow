@@ -1,4 +1,4 @@
-// src/pages/Widget.jsx - Simplified Version
+// src/pages/Widget.jsx - Updated
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/SupabaseAuthContext";
 import {
@@ -30,20 +30,20 @@ const Widget = () => {
     providerAddress: "123 Healthcare Blvd, Suite 300",
     companyLogo: null,
 
-    // Simplified Business Hours
+    // Business Hours
     businessHours: {
       startTime: "09:00",
       endTime: "17:00",
       workingDays: [1, 2, 3, 4, 5], // Monday to Friday
     },
 
-    // Booking Settings
-    bookingType: "direct", // "direct", "contact", "custom"
+    // Booking Settings - Default to contact
+    bookingType: "contact",
     contactInfo: {
-      phone: "",
-      email: "",
-      website: "",
-      message: "Call us to schedule your appointment",
+      phone: "+1 (555) 123-4567",
+      email: "appointments@yourcompany.com",
+      website: "https://yourcompany.com/book",
+      message: "Call us to schedule your appointment or visit our website",
     },
     customInstructions: {
       title: "How to Book",
@@ -85,11 +85,17 @@ const Widget = () => {
         }
 
         setWidgetSettings({
+          ...widgetSettings,
           ...parsedSettings,
           providerName: parsedSettings.providerName || "Dr. Sarah Johnson",
           providerAddress:
             parsedSettings.providerAddress || "123 Healthcare Blvd, Suite 300",
           companyLogo: parsedSettings.companyLogo || null,
+          // Ensure bookingType is never direct
+          bookingType:
+            parsedSettings.bookingType === "direct"
+              ? "contact"
+              : parsedSettings.bookingType || "contact",
         });
       } catch (err) {
         console.error("Error loading widget settings:", err);
@@ -197,7 +203,7 @@ const Widget = () => {
                 <li>
                   3. The widget automatically adapts to desktop and mobile
                 </li>
-                <li>4. Visitors can see availability and book appointments</li>
+                <li>4. Visitors can see availability and contact you</li>
               </ol>
             </div>
 
@@ -231,11 +237,9 @@ const Widget = () => {
                 </p>
                 <p>
                   <strong>Booking Type:</strong>{" "}
-                  {widgetSettings.bookingType === "direct"
-                    ? "Direct Booking"
-                    : widgetSettings.bookingType === "contact"
-                      ? "Contact to Book"
-                      : "Custom Instructions"}
+                  {widgetSettings.bookingType === "contact"
+                    ? "Contact to Book"
+                    : "Custom Instructions"}
                 </p>
               </div>
             </div>

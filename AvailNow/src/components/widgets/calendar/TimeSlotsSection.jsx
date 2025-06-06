@@ -1,24 +1,37 @@
 // src/components/widgets/calendar/TimeSlotsSection.jsx
-import React from "react";
+import React, { useState } from "react";
+import BookingModal from "./BookingModal";
 
 const TimeSlotsSection = ({
   selectedDate,
   timeSlots,
+  bookingType,
+  contactInfo,
+  customInstructions,
   styles,
-  onBookingClick,
   onWidgetClick,
 }) => {
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(null);
+
   // Format date in a readable way
   const formatDateForDisplay = (date) => {
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
 
-  // Handle booking click for individual time slot
-  const handleBookingClick = (slot) => {
-    if (onBookingClick) {
-      onBookingClick(slot);
+  // Handle time slot click
+  const handleTimeSlotClick = (slot) => {
+    if (slot.available) {
+      setSelectedTime(slot.time);
+      setShowModal(true);
     }
+  };
+
+  // Handle main booking button click
+  const handleBookingClick = () => {
+    setSelectedTime(null);
+    setShowModal(true);
   };
 
   if (!selectedDate) {
@@ -45,7 +58,7 @@ const TimeSlotsSection = ({
             {timeSlots.morning.map((slot, index) => (
               <div
                 key={index}
-                onClick={() => slot.available && handleBookingClick(slot)}
+                onClick={() => handleTimeSlotClick(slot)}
                 style={styles.timeSlot(slot.available)}
               >
                 <div style={styles.timeSlotDot(slot.available)}></div>
@@ -64,7 +77,7 @@ const TimeSlotsSection = ({
             {timeSlots.afternoon.map((slot, index) => (
               <div
                 key={index}
-                onClick={() => slot.available && handleBookingClick(slot)}
+                onClick={() => handleTimeSlotClick(slot)}
                 style={styles.timeSlot(slot.available)}
               >
                 <div style={styles.timeSlotDot(slot.available)}></div>
@@ -77,10 +90,24 @@ const TimeSlotsSection = ({
 
       {/* Book button */}
       <div style={styles.bookButtonContainer}>
-        <button style={styles.bookButton} onClick={onWidgetClick}>
-          BOOK
+        <button style={styles.bookButton} onClick={handleBookingClick}>
+          {bookingType === "contact"
+            ? "CONTACT US"
+            : customInstructions.buttonText || "BOOK NOW"}
         </button>
       </div>
+
+      {/* Modal */}
+      <BookingModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        bookingType={bookingType}
+        contactInfo={contactInfo}
+        customInstructions={customInstructions}
+        selectedDate={selectedDate}
+        selectedTime={selectedTime}
+        styles={styles}
+      />
     </div>
   );
 };
