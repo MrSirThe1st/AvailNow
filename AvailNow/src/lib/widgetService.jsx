@@ -69,16 +69,6 @@ export const getWidgetSettings = async (userId) => {
       console.warn("Error fetching calendar settings:", calendarError);
     }
 
-    // Get user profile for company logo
-    const { data: profileData, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("company_logo, display_name")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (profileError) {
-      console.warn("Error fetching user profile:", profileError);
-    }
 
     const defaultSettings = getDefaultWidgetSettings();
 
@@ -98,11 +88,8 @@ export const getWidgetSettings = async (userId) => {
       ...defaultSettings,
       ...widgetData,
       businessHours,
-      companyLogo: profileData?.company_logo || null,
-      providerName:
-        widgetData?.providerName ||
-        profileData?.display_name ||
-        defaultSettings.providerName,
+      companyLogo: widgetData?.company_logo || null,
+      providerName: widgetData?.providerName || defaultSettings.providerName,
     };
 
     return mergedSettings;
@@ -150,6 +137,7 @@ export const saveWidgetSettings = async (userId, settings) => {
       bookingType: widgetSettings.bookingType,
       contactInfo: JSON.stringify(widgetSettings.contactInfo),
       customInstructions: JSON.stringify(widgetSettings.customInstructions),
+      company_logo: companyLogo,
       updated_at: now,
     };
 
@@ -213,21 +201,6 @@ export const saveWidgetSettings = async (userId, settings) => {
         .insert(calendarSettingsData);
 
       if (calendarInsertError) throw calendarInsertError;
-    }
-
-    // Handle company logo in user_profiles if provided
-    if (companyLogo !== undefined) {
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .upsert({
-          user_id: userId,
-          avatar_url: companyLogo,
-          updated_at: now,
-        });
-
-      if (profileError) {
-        console.warn("Failed to update company logo:", profileError);
-      }
     }
 
     return {
